@@ -77,7 +77,10 @@ export class EntryGroup {
         .filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
         .map(outcome => outcome.reason)
       if (failures.length === 1) throw failures[0]
-      if (failures.length > 1) throw new AggregateError(failures, 'loader entries failed to apply')
+      if (failures.length > 1) {
+        const detail = failures.map((reason) => reason instanceof Error ? reason.message : String(reason)).join(' | ')
+        throw new AggregateError(failures, `loader entries failed to apply: ${detail}`)
+      }
       for (const id of Object.keys(oldMap)) {
         if (!newMap[id]) await this.remove(id, true)
       }

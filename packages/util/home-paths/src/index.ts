@@ -4,7 +4,7 @@
  * @module @deepseek-ai/dsh-home-paths
  */
 
-import { opendir, realpath } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 
@@ -39,8 +39,8 @@ export async function canonicalizeWatchPath(path: string): Promise<string> {
       if (missing.length > 0) {
         // A Windows file-as-parent probe reports ENOENT. Opening the resolved
         // ancestor preserves the cross-platform directory requirement.
-        const directory = await opendir(canonical)
-        await directory.close()
+        // scriptc's island fs/promises shim has readdir, not opendir.
+        await readdir(canonical)
       }
       return join(canonical, ...missing.reverse())
     } catch (error) {
