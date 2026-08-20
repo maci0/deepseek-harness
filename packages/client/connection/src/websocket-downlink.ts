@@ -111,7 +111,7 @@ export class WebSocketDownlinks {
       })
       const pump = this.pump(websocket, open(abort.signal), abort)
       this.pumps.add(pump)
-      void pump.then(() => { this.pumps.delete(pump) })
+      void pump.finally(() => { this.pumps.delete(pump) })
     })
   }
 

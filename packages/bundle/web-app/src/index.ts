@@ -11,9 +11,11 @@
  * @module @deepseek-ai/dsh-web-app
  */
 
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { existsSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { networkInterfaces } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -161,11 +163,18 @@ function localWebUrl(ctx: Context): string {
 
 /** Dist location is workspace knowledge of this bundle: resolved through the frontend package exports, not configured. */
 function resolveDistIndex(): string {
+  const fromEnv = process.env.DSH_WEB_DIST
+  if (fromEnv !== undefined && fromEnv !== '' && existsSync(fromEnv)) return fromEnv
   const require = createRequire(import.meta.url)
   try {
     return require.resolve('@deepseek-ai/dsh-web-frontend/dist/index.html')
   } catch {
-    /* v8 ignore next 2 -- reachable only on a checkout without a built dist; the test tree builds it */
+    let bin = process.argv.length > 1 ? process.argv[1] : ''
+    if (bin !== undefined && bin !== '') {
+      try { bin = realpathSync(bin) } catch { /* keep */ }
+      const beside = join(dirname(bin), 'ui', 'index.html')
+      if (existsSync(beside)) return beside
+    }
     throw new Error('web-app: frontend dist not built; run pnpm run build from the repository root first')
   }
 }
@@ -182,8 +191,27 @@ function spawnBrowserLauncher(url: string): ChildProcess {
   })
 }
 
+/** Island has no Node helper: hand the URL to the OS opener with a scrubbed env. */
+function openNativeBrowser(url: string): void {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    throw new Error(`refusing to open a non-http URL: ${url}`)
+  }
+  const platform = process.platform
+  const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open'
+  const args = platform === 'win32' ? ['/c', 'start', '', url] : [url]
+  const result = spawnSync(cmd, args, { env: scrubbedParentEnv(), stdio: 'ignore' })
+  if (result.error !== undefined) throw result.error
+  if (result.status !== 0) {
+    throw new Error(`browser operating-system launcher exited with code ${String(result.status)}`)
+  }
+}
+
 /** Hand one URL to the operating system's default browser. */
 async function openBrowser(url: string): Promise<void> {
+  if (process.argv[0] === 'scriptc') {
+    openNativeBrowser(url)
+    return
+  }
   const launcher = spawnBrowserLauncher(url)
   let launcherStderr = ''
   launcher.stderr?.setEncoding('utf8')
@@ -258,7 +286,6 @@ export function apply(ctx: Context, config: Config): void {
     // hand-built tree without a Loader is already the complete tree.
     const announceReady = (): void => {
       const webUrl = localWebUrl(ctx)
-      // Reuse the exact LAN snapshot provided to the /api trust fence.
       const lanCandidate = runtime.lanAddresses[0]
       const port = ctx.webServer.port
       if (config.printUrl) {
