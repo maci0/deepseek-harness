@@ -60,7 +60,7 @@ describe('process shutdown', () => {
 
   it('exits immediately on scriptc for default normal completion', async () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
-    const originalArgv0 = process.argv[0]
+    const originalArgv0 = process.argv[0] ?? 'node'
     const originalExitCode = process.exitCode
     process.argv[0] = 'scriptc'
     process.exitCode = undefined
