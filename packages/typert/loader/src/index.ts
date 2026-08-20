@@ -28,7 +28,6 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -343,7 +342,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const loadManifest = (pkgName: string, path: string): Promise<TypertContribution> => {
     let loading = manifests.get(pkgName)
     if (loading === undefined) {
-      loading = import(pathToFileURL(path).href).then(
+      loading = import(`${pkgName}/typert`).then(
         (mod: Record<string, unknown>) => validateTypertManifest(pkgName, mod.TYPERT),
         (cause: unknown) => {
           throw new Error(
