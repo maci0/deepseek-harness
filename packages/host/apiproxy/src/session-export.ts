@@ -371,6 +371,57 @@ async function pushArtifactChunks(
 }
 
 /**
+ * Build one session-log ZIP in memory. The scriptc island HTTP/ReadableStream
+ * path drops the archive after the first DEFLATE chunk, so native export
+ * materializes the bytes before answering.
+ */
+export async function bufferSessionLogZip(
+  deps: SessionLogExportReady,
+  root: SessionRawArtifact,
+  sessionId: SessionId,
+  includeDescendants: boolean,
+  compressionLevel: SessionLogCompressionLevel,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = []
+  const encoder = new TextEncoder()
+  await new Promise<void>((resolve, reject) => {
+    const archive = new Zip((error, data, final) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      if (data.byteLength > 0) chunks.push(data)
+      if (final) resolve()
+    })
+    void (async () => {
+      try {
+        for await (const entry of sessionLogZipEntries(deps, root, sessionId, includeDescendants, signal)) {
+          signal.throwIfAborted()
+          const deflate = new ZipDeflate(entry.path, { level: compressionLevel })
+          archive.add(deflate)
+          if ('content' in entry) deflate.push(encoder.encode(entry.content), true)
+          else deflate.push(entry.data, true)
+        }
+        archive.end()
+      } catch (error) {
+        archive.terminate()
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    })()
+  })
+  let total = 0
+  for (const chunk of chunks) total += chunk.byteLength
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    out.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return out
+}
+
+/**
  * Stream one session-log ZIP as a WHATWG ReadableStream. The root artifact is
  * read and validated by the caller before this is called (missing root or
  * missing services answer cleanly before any byte is produced); each entry is
