@@ -22,7 +22,8 @@ export interface ProcessShutdown {
 export function createProcessShutdown(
   dispose: () => Promise<void>,
   forceExit: (code: number) => void = (code) => { process.exit(code) },
-  complete: (code: number) => void = (code) => { process.exitCode = code },
+  // scriptc SC1090: `process.exitCode = n` is assignment to a non-variable.
+  complete: (code: number) => void = (code) => { process.exit(code) },
   timeoutMs = PROCESS_SHUTDOWN_TIMEOUT_MS,
 ): ProcessShutdown {
   let pending: Promise<void> | undefined
@@ -52,13 +53,11 @@ export function createProcessShutdown(
   const start = (code: number, forceAfterDispose: boolean): Promise<void> => {
     if (pending !== undefined) return pending
     timeout = setTimeout(() => { forceExitOnce(code) }, timeoutMs)
-    pending = Promise.resolve().then(dispose).then(
-      () => {
-        if (forceAfterDispose) forceExitOnce(code)
-        else completeOnce(code)
-      },
-      () => { forceExitOnce(code) },
-    )
+    // scriptc SC2020: Promise.then with two arguments has no lowering.
+    pending = Promise.resolve().then(dispose).then(() => {
+      if (forceAfterDispose) forceExitOnce(code)
+      else completeOnce(code)
+    }).catch(() => { forceExitOnce(code) })
     return pending
   }
 

@@ -15,7 +15,7 @@
  * @module @deepseek-ai/dsh/args
  */
 
-import { Command, CommanderError } from 'commander'
+import { Command } from 'commander'
 
 /** Boot a named profile and hand it the invocation's inner arguments. */
 interface ProfileInvocation {
@@ -119,7 +119,11 @@ export function parseDshArgs(argv: readonly string[], version: string): DshInvoc
     .version(version, '-V, --version', 'output the version number')
     .description('dsh: boot a DeepSeek Harness profile — an ordered stack of plugin-bundle patch layers under your own overrides.')
     .addHelpText('after', HELP_EXAMPLES)
-    .exitOverride()
+    // scriptc SC1090: catching CommanderError and `instanceof` against the
+    // island class does not compile. Exit from the override with its code.
+    .exitOverride((err: { exitCode: number }) => {
+      process.exit(err.exitCode)
+    })
     // The launcher's flags come first and end at the first token it does not
     // know; everything from there on belongs to the booted app, including
     // its -h. `dsh -h` with no profile still prints this help, below.
@@ -180,12 +184,8 @@ export function parseDshArgs(argv: readonly string[], version: string): DshInvoc
       resolved = { mode: 'plugin', profile: options.profile, args }
     })
 
-  try {
-    program.parse(argv, { from: 'user' })
-  } catch (error) {
-    return process.exit(error instanceof CommanderError ? error.exitCode : 1)
-  }
-  /* v8 ignore next -- an action resolves or Commander throws */
+  program.parse(argv, { from: 'user' })
+  /* v8 ignore next -- an action resolves or Commander exits via exitOverride */
   if (resolved === undefined) throw new Error('dsh: no invocation resolved')
   return resolved
 }

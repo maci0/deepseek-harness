@@ -11,12 +11,11 @@
  * @module @deepseek-ai/dsh/profile-boot
  */
 
-import { writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { FiberState, type Context } from '@deepseek-ai/cordis'
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import type { Context } from '@deepseek-ai/cordis'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import {
   boot,
   composeEntries,
@@ -31,14 +30,80 @@ import {
 } from '@deepseek-ai/dsh-app-boot'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 
-/** Shipped agent-preset root: beside this app's own config, in both source and built layouts. */
-const SHIPPED_PRESET_ROOT = fileURLToPath(new URL('../config/agent-presets/', import.meta.url))
+/**
+ * Absolute path of this dsh installation's package.json.
+ * scriptc SC2020: `import.meta.url` has no lowering. Prefer `$DSH_INSTALL`,
+ * then `package.json` next to the executable (the dist layout), then the
+ * workspace clone used when running `notes/dsh` from this tree.
+ */
+export const INSTALL_ANCHOR: string = (() => {
+  const fromEnv = process.env.DSH_INSTALL
+  if (fromEnv !== undefined && fromEnv !== '') return fromEnv
+  const starts: string[] = []
+  if (process.argv.length > 1 && process.argv[1] !== undefined && process.argv[1] !== '') {
+    let slot = process.argv[1]
+    try { slot = realpathSync(slot) } catch { /* keep unresolved */ }
+    starts.push(dirname(slot))
+  }
+  starts.push(process.cwd())
+  for (const start of starts) {
+    let dir = start
+    for (let i = 0; i < 10; i++) {
+      const candidate = join(dir, 'package.json')
+      if (existsSync(candidate)) {
+        try {
+          if (readFileSync(candidate, 'utf8').includes('@deepseek-ai/dsh')) return candidate
+        } catch { /* keep walking */ }
+      }
+      const parent = dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+  }
+  let bin = process.argv.length > 1 && process.argv[1] !== undefined ? process.argv[1] : '.'
+  try { bin = realpathSync(bin) } catch { /* keep */ }
+  return join(dirname(bin), 'package.json')
+})()
+
+/** Shipped agent-preset root: beside this app's own config. */
+const SHIPPED_PRESET_ROOT = join(dirname(INSTALL_ANCHOR), 'config', 'agent-presets')
+
+/**
+ * Native default 3080 collides with a running Node dsh. On the island web
+ * profile, an unspecified --port becomes 0 so the OS picks a free port.
+ * Headless has no --port flag; leave its argv alone.
+ */
+function nativeWebListenArgs(profile: string, args: readonly string[]): readonly string[] {
+  if (process.argv[0] !== 'scriptc') return args
+  if (profile !== 'web') return args
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--port' || (typeof arg === 'string' && arg.startsWith('--port='))) return args
+  }
+  return args.concat(['--port', '0'])
+}
+
+/**
+ * The native binary's process.argv[0] is "scriptc". An existing ~/.dsh from
+ * Node may mix uncompressed .jsonl and .jsonl.zstd session logs; either
+ * compression mode then refuses to boot. Default to ~/.dsh-native unless
+ * the user set DSH_HOME.
+ */
+function pinNativeHome(): void {
+  if ((process.env.DSH_HOME ?? '').trim() !== '') return
+  const a0 = process.argv[0]
+  if (a0 !== 'scriptc' && a0 !== 'dsh' && !(typeof a0 === 'string' && a0.endsWith('/dsh'))) return
+  process.env.DSH_HOME = join(homedir(), '.dsh-native')
+}
 
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { createProcessShutdown, type ProcessShutdown } from './process-shutdown.ts'
 
 const NAME = 'dsh'
+
+/** FiberState.ACTIVE — cordis is an island package, so the const enum is inlined. */
+const FIBER_ACTIVE = 2
 
 /**
  * The home-level user patch layer (`$DSH_HOME/cordis.patch.yml`), applied
@@ -49,9 +114,6 @@ const NAME = 'dsh'
 export function homePatchPath(): string {
   return join(resolveDshHome(), PROFILE_PATCH_FILENAME)
 }
-
-/** Absolute path of this dsh installation's package.json (both anchors: src/ and lib/ sit one level under apps/cli). */
-export const INSTALL_ANCHOR = fileURLToPath(new URL('../package.json', import.meta.url))
 
 /** The session-telemetry row id the DSH_TELEMETRY_DISABLED switch targets. */
 const TELEMETRY_ROW_ID = 'session-telemetry-otel'
@@ -96,8 +158,10 @@ export function resolveTelemetryPatch(disabledEnv: string | undefined, hasRow: b
  * @returns the loaded profile.
  */
 export function prepareProfile(name: string, userLayer = true): Profile {
-  healProfilesModuleFallback(INSTALL_ANCHOR)
-  const profile = loadProfile(NAME, name, INSTALL_ANCHOR, undefined, { userLayer })
+  pinNativeHome()
+  const home = resolveDshHome()
+  healProfilesModuleFallback(INSTALL_ANCHOR, home)
+  const profile = loadProfile(NAME, name, INSTALL_ANCHOR, home, { userLayer })
   writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   return profile
 }
@@ -111,21 +175,29 @@ interface ComposedProfile {
   homePatches: PatchOptions[]
   /** Layers above the user layers on a live reload: `--patch` overlays and the telemetry switch. */
   overlays: PatchOptions[]
-  /**
-   * id → row of the composed tree (bundles + user layers + overlays), for the
-   * launcher's own row checks.
-   */
-  rows: ReadonlyMap<string, EntryOptions>
+  /** ids present in the composed tree (bundles + user layers + overlays). */
+  rowIds: Record<string, boolean>
+  /** Config of the `agent-presets` row, if that row is in the tree. */
+  agentPresetsConfig: Record<string, unknown> | undefined
 }
 
 /** The full patch stack of one composed profile, in application order. */
 function allPatches(composed: ComposedProfile): PatchOptions[] {
-  return [
-    ...composed.bundlePatches,
-    ...composed.profile.patches,
-    ...composed.homePatches,
-    ...composed.overlays,
-  ]
+  // scriptc SC1090: array spread arguments do not compile; concat does.
+  return composed.bundlePatches.concat(
+    composed.profile.patches,
+    composed.homePatches,
+    composed.overlays,
+  )
+}
+
+/** JSON-shaped clone of island patch rows. structuredClone cannot clone them. */
+type PatchJson = string | number | boolean | PatchJson[] | { [key: string]: PatchJson }
+
+function clonePatchList(patches: PatchOptions[]): PatchOptions[] {
+  const text = JSON.stringify(patches)
+  const cloned = JSON.parse(text) as PatchJson[]
+  return cloned as unknown as PatchOptions[]
 }
 
 /**
@@ -145,29 +217,48 @@ function composeProfile(
 ): ComposedProfile {
   const profile = prepareProfile(name)
   const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
-  const overlays = patchFiles.flatMap(file => loadOverlayPatches(NAME, resolve(file)))
-  const bundlePatches = profile.layers.flatMap(layer => layer.patches)
-  const rows = new Map<string, EntryOptions>()
-  for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays])) {
-    if (typeof row.id === 'string') rows.set(row.id, row)
+  // scriptc island Array.flatMap over yaml-loaded overlay lists can nest the
+  // patch rows, so Include never sees `insert`. Concat matches dump-config.
+  let overlays: PatchOptions[] = []
+  for (const file of patchFiles) {
+    overlays = overlays.concat(loadOverlayPatches(NAME, resolve(file)))
   }
-  const composedOverlays = [...overlays]
+  let bundlePatches: PatchOptions[] = []
+  for (const layer of profile.layers) {
+    bundlePatches = bundlePatches.concat(layer.patches)
+  }
+  // scriptc SC1090: Map values may not be function-bearing records, and
+  // `typeof` on a statically-typed field is fenced. Index ids as booleans.
+  const rowIds: Record<string, boolean> = {}
+  let agentPresetsConfig: Record<string, unknown> | undefined
+  for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays])) {
+    const id = row.id
+    if (id === '') continue
+    rowIds[id] = true
+    if (id === 'agent-presets' && row.config !== undefined && row.config !== null && typeof row.config === 'object') {
+      agentPresetsConfig = row.config as Record<string, unknown>
+    }
+  }
+  const composedOverlays = overlays.concat()
   // The SHIPPED root is the part of the roster only this app can resolve: it
   // sits beside this app's own config, in both the source and built layouts.
   // The writable root the roster appends is `dsh-agent-presets`' own, so a
   // launcher that never reaches this patch still finds a person's presets.
-  if (rows.has('agent-presets')) {
+  if (rowIds['agent-presets'] === true) {
     composedOverlays.push({
       id: 'agent-presets',
       config: {
-        ...(rows.get('agent-presets')?.config ?? {}) as Record<string, unknown>,
+        default: 'standard',
         roots: [{ path: SHIPPED_PRESET_ROOT, trust: 'system' }],
       },
     })
   }
-  const telemetryPatch = resolveTelemetryPatch(process.env.DSH_TELEMETRY_DISABLED, rows.has(TELEMETRY_ROW_ID))
+  const telemetryPatch = resolveTelemetryPatch(
+    process.env.DSH_TELEMETRY_DISABLED,
+    rowIds[TELEMETRY_ROW_ID] === true,
+  )
   if (telemetryPatch !== undefined) composedOverlays.push(telemetryPatch)
-  return { profile, bundlePatches, homePatches, overlays: composedOverlays, rows }
+  return { profile, bundlePatches, homePatches, overlays: composedOverlays, rowIds, agentPresetsConfig }
 }
 
 /** Options for {@link runProfile}. */
@@ -194,7 +285,7 @@ export interface RunProfileOptions {
  */
 function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown): void {
   if (signal.aborted) return
-  if (ctx.fiber.state !== FiberState.ACTIVE || ctx.get('loader') === undefined) return
+  if (ctx.fiber.state !== FIBER_ACTIVE || ctx.get('loader') === undefined) return
   throw error
 }
 
@@ -205,6 +296,7 @@ function suppressShutdownError(ctx: Context, signal: AbortSignal, error: unknown
  * @returns the settled root context and the shutdown controller.
  */
 export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Context; shutdown: ProcessShutdown }> {
+  pinNativeHome()
   const composed = composeProfile(options.profile, options.patchFiles)
   const app: { current?: Context } = {}
   const shutdown = createProcessShutdown(async () => { await app.current?.fiber.dispose() })
@@ -220,9 +312,9 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // complete; SIGINT is a user interrupt and reports 130.
   process.on('SIGTERM', () => { interrupt(0) })
   process.on('SIGINT', () => { interrupt(130) })
-  installFailLoud(NAME, process, async () => {
-    await app.current?.fiber.dispose()
-  })
+  // scriptc SC2020: passing the `process` object into island code has no
+  // lowering. The island default is the process shim; skip the local release.
+  installFailLoud(NAME)
 
   const rootConfig = join(composed.profile.dir, PROFILE_ROOT_FILENAME)
   // Recomposition for the live user layers: bundle layers below, overlays
@@ -237,27 +329,35 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // objects in place. Reusing one parsed patch object across applications
   // would bake a user override into the bundle's in-memory insert row, so
   // removing the override could never revert the row to the bundle default.
-  const composeLive = (): PatchOptions[] => structuredClone([
-    ...composed.bundlePatches,
-    ...loadOptionalPatches(NAME, composed.profile.patchPath) ?? [],
-    ...loadOptionalPatches(NAME, homePatchPath()) ?? [],
-    ...composed.overlays,
-  ])
+  const composeLive = (): PatchOptions[] => clonePatchList(
+    composed.bundlePatches.concat(
+      loadOptionalPatches(NAME, composed.profile.patchPath) ?? [],
+      loadOptionalPatches(NAME, homePatchPath()) ?? [],
+      composed.overlays,
+    ),
+  )
   // Cloned for the same insert-aliasing reason as composeLive: the boot
   // application must not mutate the objects later reloads recompose from.
-  const ctx = await boot(NAME, rootConfig, structuredClone(allPatches(composed)), (hostCtx) => {
-    app.current = hostCtx
-    // Before any config-tree entry mounts, so plugins resolve all launch-time
-    // environment values from the same immutable provenance snapshot.
-    hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
-    // The command line and bounded exit request are launcher facts available
-    // to every app plugin that injects the argument snapshot.
-    provideCmdline(hostCtx, {
-      args: options.args,
-      exit: code => void shutdown.shutdown(code),
+  let ctx: Context
+  try {
+    ctx = await boot(NAME, rootConfig, clonePatchList(allPatches(composed)), (hostCtx) => {
+      app.current = hostCtx
+      // Before any config-tree entry mounts, so plugins resolve all launch-time
+      // environment values from the same immutable provenance snapshot.
+      hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, options.environment)
+      // The command line and bounded exit request are launcher facts available
+      // to every app plugin that injects the argument snapshot.
+      provideCmdline(hostCtx, {
+        args: nativeWebListenArgs(options.profile, options.args),
+        exit: code => void shutdown.shutdown(code),
+      })
     })
-  })
+  } catch (error) {
+    process.stderr.write(`dsh: boot failed: ${String(error)}\n`)
+    process.exit(1)
+  }
   app.current = ctx
+  const nativeIsland = process.argv[0] === 'scriptc'
   // A surface can dispose the whole tree while boot or this post-boot watcher
   // setup is still in flight — a signal, or a fast one-shot's appExit. Loader
   // presence and fiber state own liveness; the initial check skips a tree
@@ -265,8 +365,9 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // landed mid-setup. Watching is unconditional: a one-shot surface exits
   // through its bounded shutdown, which disposes the watchers before the
   // loop drains.
-  if (!signalShutdown.signal.aborted
-    && ctx.fiber.state === FiberState.ACTIVE
+  if (!nativeIsland
+    && !signalShutdown.signal.aborted
+    && ctx.fiber.state === FIBER_ACTIVE
     && ctx.get('loader') !== undefined) {
     try {
       // Config-only HMR for the live profile patch layer: the web bundle
@@ -295,6 +396,13 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     } catch (error) {
       suppressShutdownError(ctx, signalShutdown.signal, error)
     }
+  }
+  // scriptc island.import of a module with top-level await treats the
+  // fulfilled module namespace as an uncaught [object] once the entry
+  // promise settles. Long-lived web stays on this promise until a signal
+  // or cmdline exit calls process.exit.
+  if (ctx.get('webServer') !== undefined) {
+    await new Promise<void>(() => {})
   }
   return { ctx, shutdown }
 }
