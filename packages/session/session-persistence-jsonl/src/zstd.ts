@@ -6,13 +6,15 @@
  */
 
 import {
-  constants, zstdCompress, zstdDecompress, type ZstdOptions,
+  constants, gunzipSync, zstdCompress, zstdDecompress, type ZstdOptions,
 } from 'node:zlib'
 import { promisify } from 'node:util'
 import { NodePrivateZstdFrameDecoder } from './zstd-private-decoder.ts'
 import { PublicZstdFrameDecoder } from './zstd-public-decoder.ts'
 
 const ZSTD_MAGIC = 0xFD2FB528
+const GZIP_MAGIC_0 = 0x1f
+const GZIP_MAGIC_1 = 0x8b
 const zstdCompressAsync = promisify(zstdCompress)
 const zstdDecompressAsync = promisify(zstdDecompress)
 const CHECKSUM_OPTIONS: ZstdOptions = {
@@ -45,6 +47,24 @@ export interface ZstdFrameScan {
  * @param maxFrames - optional complete-frame limit for metadata-only readers.
  * @returns complete frame ranges and an optional incomplete-final-frame start.
  */
+/**
+ * Whether `buffer` starts with a gzip member. The scriptc island maps
+ * `zlib.zstdCompress` to gzip, so native `.jsonl.zstd` artifacts are gzip
+ * bytes under a zstd filename.
+ * @param buffer - stored artifact bytes.
+ */
+export function isGzipBuffer(buffer: Buffer): boolean {
+  return buffer.length >= 2 && buffer[0] === GZIP_MAGIC_0 && buffer[1] === GZIP_MAGIC_1
+}
+
+/**
+ * Decode one or more concatenated gzip members to UTF-8 JSONL text.
+ * @param buffer - gzip-encoded artifact bytes.
+ */
+export function decodeGzipLog(buffer: Buffer): string {
+  return gunzipSync(buffer).toString('utf8')
+}
+
 export function scanZstdFrames(buffer: Buffer, maxFrames = Number.POSITIVE_INFINITY): ZstdFrameScan {
   const frames: ZstdFrameRange[] = []
   let offset = 0
