@@ -58,6 +58,26 @@ describe('process shutdown', () => {
     }
   })
 
+  it('exits immediately on scriptc for default normal completion', async () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
+    const originalArgv0 = process.argv[0]
+    const originalExitCode = process.exitCode
+    process.argv[0] = 'scriptc'
+    process.exitCode = undefined
+    const shutdown = createProcessShutdown(() => Promise.resolve())
+
+    try {
+      await shutdown.shutdown(7)
+
+      expect(exit).toHaveBeenCalledOnce()
+      expect(exit).toHaveBeenCalledWith(7)
+      expect(process.exitCode).toBeUndefined()
+    } finally {
+      process.argv[0] = originalArgv0
+      process.exitCode = originalExitCode
+    }
+  })
+
   it('forces exit when graceful disposal reaches its bound', async () => {
     vi.useFakeTimers()
     const disposal = deferred()
