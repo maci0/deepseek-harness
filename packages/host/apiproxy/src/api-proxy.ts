@@ -3624,7 +3624,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               sessionExportCompressionLevel,
               signal,
             )
-            return new Response(bytes, { headers: zipHeaders })
+            return new Response(bytes as BodyInit, { headers: zipHeaders })
           } catch (error: unknown) {
             signal.throwIfAborted()
             process.stderr.write(
