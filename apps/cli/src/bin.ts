@@ -28,7 +28,9 @@ const invocation = parseDshArgs(process.argv.slice(2), readVersion())
 
 switch (invocation.mode) {
   case 'profile': {
-    const { runProfile } = await import('./profile-boot.ts')
+    const { runProfile, installNodeComplete } = await import('./profile-boot.ts')
+    const { recordNodeExitCode } = await import('./process-shutdown.ts')
+    installNodeComplete(recordNodeExitCode)
     await runProfile({
       environment: loadLayeredEnv('dsh'),
       profile: invocation.profile,
