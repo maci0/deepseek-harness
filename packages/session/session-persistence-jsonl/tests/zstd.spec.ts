@@ -379,7 +379,7 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
   })
 
   it('scriptc lists a plaintext session.jsonl under default zstd config', async () => {
-    const argv0 = process.argv[0]
+    const argv0 = process.argv[0] ?? 'node'
     process.argv[0] = 'scriptc'
     try {
       const root = await freshRoot()
