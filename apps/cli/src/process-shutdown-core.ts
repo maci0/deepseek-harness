@@ -21,6 +21,47 @@ export interface ProcessShutdown {
  * @param timeoutMs - Grace before forced exit, replaceable by tests.
  * @returns A controller whose normal calls coalesce and whose repeated signal call escalates.
  */
+let nodeComplete: ((code: number) => void) | undefined
+
+/**
+ * Node `dsh` (`bin.ts`) installs `recordNodeExitCode` here so
+ * {@link createProfileShutdown} can record `process.exitCode` without that
+ * assignment living in the scriptc compile graph (SC1090).
+ */
+export function installNodeComplete(complete: (code: number) => void): void {
+  nodeComplete = complete
+}
+
+/** Test-only: drop a previously installed Node complete callback. */
+export function resetNodeComplete(): void {
+  nodeComplete = undefined
+}
+
+function profileForceExit(code: number): void {
+  process.exit(code)
+}
+
+function profileComplete(code: number): void {
+  if (process.argv[0] === 'scriptc') {
+    process.exit(code)
+    return
+  }
+  const installed = nodeComplete
+  if (installed !== undefined) {
+    installed(code)
+    return
+  }
+  process.exit(code)
+}
+
+/**
+ * Shutdown factory used by {@link runProfile}. Node records exitCode after
+ * `installNodeComplete`; scriptc always `process.exit`s.
+ */
+export function createProfileShutdown(dispose: () => Promise<void>): ProcessShutdown {
+  return createProcessShutdown(dispose, profileForceExit, profileComplete)
+}
+
 export function createProcessShutdown(
   dispose: () => Promise<void>,
   forceExit: (code: number) => void,

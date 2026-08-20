@@ -98,7 +98,9 @@ function pinNativeHome(): void {
 
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
-import { createProcessShutdown, type ProcessShutdown } from './process-shutdown-core.ts'
+import { createProfileShutdown, installNodeComplete, type ProcessShutdown } from './process-shutdown-core.ts'
+
+export { installNodeComplete }
 
 const NAME = 'dsh'
 
@@ -299,12 +301,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   pinNativeHome()
   const composed = composeProfile(options.profile, options.patchFiles)
   const app: { current?: Context } = {}
-  const forceExit = (code: number): void => { process.exit(code) }
-  const shutdown = createProcessShutdown(
-    async () => { await app.current?.fiber.dispose() },
-    forceExit,
-    forceExit,
-  )
+  const shutdown = createProfileShutdown(async () => { await app.current?.fiber.dispose() })
   const signalShutdown = new AbortController()
   const interrupt = (code: number): void => {
     signalShutdown.abort()

@@ -8,6 +8,11 @@ import {
 
 export { PROCESS_SHUTDOWN_TIMEOUT_MS, type ProcessShutdown }
 
+/** Node records the code for event-loop drain. scriptc never compiles this file. */
+export function recordNodeExitCode(code: number): void {
+  process.exitCode = code
+}
+
 /**
  * Create one process-exit controller around an application disposer.
  * Node defaults record `process.exitCode` and drain; tests inject fakes.
