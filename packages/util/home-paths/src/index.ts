@@ -4,7 +4,8 @@
  * @module @deepseek-ai/dsh-home-paths
  */
 
-import { readdir, realpath } from 'node:fs/promises'
+import { realpathSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 
@@ -35,14 +36,18 @@ export async function canonicalizeWatchPath(path: string): Promise<string> {
   const missing: string[] = []
   while (true) {
     try {
-      const canonical = await realpath(current)
+      // realpathSync has a scriptc lowering; fs/promises.realpath does not (SC2020).
+      const canonical = realpathSync(current)
       if (missing.length > 0) {
         // A Windows file-as-parent probe reports ENOENT. Opening the resolved
         // ancestor preserves the cross-platform directory requirement.
         // scriptc's island fs/promises shim has readdir, not opendir.
         await readdir(canonical)
       }
-      return join(canonical, ...missing.reverse())
+      missing.reverse()
+      let out = canonical
+      for (const part of missing) out = join(out, part)
+      return out
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       const parent = dirname(current)
@@ -96,7 +101,9 @@ export function resolveDshHome(configured?: string, env: Record<string, string |
  * @returns the normalized absolute joined path.
  */
 export function dshHomePath(...segments: string[]): string {
-  return join(resolveDshHome(), ...segments)
+  let out = resolveDshHome()
+  for (const segment of segments) out = join(out, segment)
+  return out
 }
 
 /**
