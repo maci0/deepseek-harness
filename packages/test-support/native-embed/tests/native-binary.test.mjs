@@ -366,19 +366,10 @@ test('native dsh web API', async (t) => {
   })
   await t.test('events.mux stays up through session.create', async () => {
     const mux = new URL('/api/events.mux', url)
-    mux.protocol = 'ws:'
-    const ws = new WebSocket(mux)
-    await new Promise((resolve, reject) => {
-      const deadline = setTimeout(() => reject(new Error(`websocket timeout\n${dump('websocket')}`)), 5000)
-      ws.addEventListener('open', () => {
-        clearTimeout(deadline)
-        resolve()
-      })
-      ws.addEventListener('error', (event) => {
-        clearTimeout(deadline)
-        reject(new Error(`websocket error ${event.message ?? event}\n${dump('websocket')}`))
-      })
-    })
+    const ac = new AbortController()
+    const res = await fetch(mux, { signal: ac.signal })
+    assert.equal(res.status, 200, `GET events.mux HTTP ${res.status}\n${dump('events.mux')}`)
+    assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/, dump('events.mux'))
     try {
       const got = await postApi(url, 'session.create')
       assertRpcOk('session.create', got, dump)
@@ -387,7 +378,7 @@ test('native dsh web API', async (t) => {
       assert.doesNotMatch(state.stderr, /Unhandled promise rejection/, dump('process death after mux session.create'))
       assert.doesNotMatch(state.stderr, /TypeError: not a function/, dump('process death after mux session.create'))
     } finally {
-      ws.close()
+      ac.abort()
     }
   })
 })

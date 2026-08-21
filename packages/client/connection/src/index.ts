@@ -147,7 +147,9 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
         && !isTrustedApiRequest(request, [])) {
         return new Response('forbidden', { status: 403 })
       }
-      if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)) {
+      // Island HTTP has no WebSocket upgrade. Native GET uses toFetchHandler SSE.
+      if (request.method === 'GET' && (pathname === MUX_EVENTS_PATH || pathname === HOST_EVENTS_PATH)
+        && process.argv[0] !== 'scriptc') {
         return new Response('upgrade required', {
           status: 426,
           headers: { connection: 'Upgrade', upgrade: 'websocket' },

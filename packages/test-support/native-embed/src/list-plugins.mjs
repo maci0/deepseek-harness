@@ -48,12 +48,25 @@ function walkDirs(start, skip, visitFile) {
   }
 }
 
+function addPlugin(byName, name, dir, kind) {
+  let row = byName.get(name)
+  if (row === undefined) {
+    row = { name, dir, kinds: [] }
+    byName.set(name, row)
+  }
+  if (typeof dir === 'string' && dir !== '' && (row.dir === '' || dir.length < row.dir.length)) {
+    row.dir = dir
+  }
+  if (kind !== undefined && !row.kinds.includes(kind)) row.kinds.push(kind)
+}
+
 /**
  * @param {string} root - deepseek-harness repository root
- * @returns {string[]} sorted package names
+ * @returns {{ name: string, dir: string, kinds: string[] }[]}
  */
-export function listApplyPluginNames(root) {
-  const names = new Set()
+export function listApplyPlugins(root) {
+  const byName = new Map()
+  const pkgDirByName = new Map()
   walkDirs(
     [join(root, 'packages'), join(root, 'vendor'), join(root, 'apps')],
     new Set(['node_modules', 'lib']),
@@ -62,13 +75,15 @@ export function listApplyPluginNames(root) {
       if (path.includes('/tests/fixtures/')) return
       const pkg = JSON.parse(readFileSync(path, 'utf8'))
       if (typeof pkg.name !== 'string' || !pkg.name.startsWith('@deepseek-ai/')) return
-      const srcRoot = join(dirname(path), 'src')
+      const dir = dirname(path)
+      pkgDirByName.set(pkg.name, dir)
+      const srcRoot = join(dir, 'src')
       walkDirs([srcRoot], new Set(['node_modules']), (srcPath, srcName) => {
         if (!srcName.endsWith('.ts') && !srcName.endsWith('.tsx')) return
         if (srcName === 'invariant.ts') return
         const text = readFileSync(srcPath, 'utf8')
-        if (APPLY_RE.test(text)) names.add(pkg.name)
-        if (srcName === 'index.ts' && isDefaultServicePlugin(text)) names.add(pkg.name)
+        if (APPLY_RE.test(text)) addPlugin(byName, pkg.name, dir, 'apply')
+        if (srcName === 'index.ts' && isDefaultServicePlugin(text)) addPlugin(byName, pkg.name, dir, 'service')
       })
     },
   )
@@ -82,11 +97,20 @@ export function listApplyPluginNames(root) {
       let match
       while ((match = YAML_NAME_RE.exec(text)) !== null) {
         const pkg = pkgNameOf(match[1])
-        if (!YAML_BUNDLE_PACKAGES.has(pkg)) names.add(pkg)
+        if (YAML_BUNDLE_PACKAGES.has(pkg)) continue
+        addPlugin(byName, pkg, pkgDirByName.get(pkg) ?? dirname(path), 'yaml')
       }
     },
   )
-  return [...names].sort()
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * @param {string} root - deepseek-harness repository root
+ * @returns {string[]} sorted package names
+ */
+export function listApplyPluginNames(root) {
+  return listApplyPlugins(root).map((row) => row.name)
 }
 
 const invoked = process.argv[1] !== undefined
