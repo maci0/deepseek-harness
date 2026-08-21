@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-native-embed",
   "description": "scriptc compile entry: side-effect imports every default web/headless profile plugin so --dynamic embeds them",
-  "version": "0.1.1-rc.1",
+  "version": "0.1.1-rc.2",
   "private": true,
   "type": "module",
   "main": "lib/index.js",
