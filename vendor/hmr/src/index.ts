@@ -127,7 +127,7 @@ class Hmr extends Service {
             set() { return this },
             delete() { return false },
           },
-        } as typeof this.internal
+        } as unknown as typeof this.internal
       } else {
         throw new Error('--expose-internals is required for HMR service')
       }
