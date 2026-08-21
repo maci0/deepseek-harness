@@ -60,12 +60,16 @@ export const SURFACE_PACKAGES: Record<DirectoryPickerBackendKind, string> = {
  * @param ctx - cordis context carrying the injected `webServer` and `loader`.
  */
 export async function apply(ctx: Context): Promise<void> {
-  const backend = resolveDirectoryPickerBackend({
-    bindHost: ctx.webServer.host,
-    platform: process.platform,
-    env: process.env,
-    linuxChooser: hasLinuxChooserBinary(process.env.PATH, canExecute),
-  })
+  // Island child_process.execFile is a stub; zenity/osascript cannot run.
+  // The browse backend uses fs.readdir and the in-app directory dialog.
+  const backend = process.argv[0] === 'scriptc'
+    ? 'browse'
+    : resolveDirectoryPickerBackend({
+      bindHost: ctx.webServer.host,
+      platform: process.platform,
+      env: process.env,
+      linuxChooser: hasLinuxChooserBinary(process.env.PATH, canExecute),
+    })
   await ctx.effect(async () => {
     // Root-tree create: the Loader root is in-memory (write() is a no-op), so
     // the mounted rows can never be persisted back into a config file. The
