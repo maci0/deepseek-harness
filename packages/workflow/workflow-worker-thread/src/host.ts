@@ -7,6 +7,7 @@
  */
 
 import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { WorkerOptions } from 'node:worker_threads'
 import { fileURLToPath } from 'node:url'
@@ -65,6 +66,12 @@ export function workerSpawnEnv(
  * @returns the entry path or URL and the Worker options to spawn it with.
  */
 function resolveWorkerSpawn(init: WorkerInit): { entry: string | URL; options: WorkerOptions } {
+  if (process.argv[0] === 'scriptc') {
+    return {
+      entry: join(dirname(process.execPath), 'dsh-workflow-worker.cjs'),
+      options: { workerData: init, env: workerSpawnEnv(), execArgv: [] },
+    }
+  }
   /* v8 ignore next 3 -- the built-output arm: tests always run unbuilt (src/); the built-worker e2e exercises this shape for real */
   if (!import.meta.url.endsWith('.ts')) {
     return { entry: fileURLToPath(new URL('./worker.cjs', import.meta.url)), options: { workerData: init, env: workerSpawnEnv(), execArgv: [] } }

@@ -9,6 +9,7 @@
 import { Worker } from 'node:worker_threads'
 import { stripTypeScriptTypes } from 'node:module'
 import type { Readable } from 'node:stream'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -103,7 +104,9 @@ interface LiveRun {
  * receives a filesystem string so pkg's VFS Worker hook can resolve it.
  */
 /* v8 ignore next -- the './worker.cjs' arm is the built-lib world, unreachable unbuilt by construction; the built-lib e2e pins it. */
-const WORKER_PATH = fileURLToPath(new URL(new URL(import.meta.url).pathname.endsWith('.ts') ? './worker.ts' : './worker.cjs', import.meta.url))
+const WORKER_PATH = process.argv[0] === 'scriptc'
+  ? join(dirname(process.execPath), 'dsh-code-runtime-worker.cjs')
+  : fileURLToPath(new URL(new URL(import.meta.url).pathname.endsWith('.ts') ? './worker.ts' : './worker.cjs', import.meta.url))
 
 /** Render an unknown thrown value as a message, `Error` or not. */
 function messageOf(error: unknown): string {

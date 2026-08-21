@@ -751,7 +751,12 @@ test('native sharp and landlock work', () => {
 })
 
 test('native Worker, watch/HMR, cordis runners, and directory-picker work', () => {
-  for (const family of ['worker', 'watch', 'host-runner', 'client-runner', 'directory-picker']) {
+  const worker = probe('worker')
+  assert.equal(worker.status, 0, worker.stdout + worker.stderr)
+  assert.match(worker.stdout, /"ok":true/)
+  assert.match(worker.stdout, /"code":7/)
+  assert.match(worker.stdout, /"workflow":1/)
+  for (const family of ['watch', 'host-runner', 'client-runner', 'directory-picker']) {
     const r = probe(family)
     assert.equal(r.status, 0, `${family}: ${r.stdout}${r.stderr}`)
     assert.match(r.stdout, /"ok":true/)

@@ -124,29 +124,73 @@ async function probeLandlock() {
   ok('landlock', { launcher, verdict })
 }
 
-async function probeWorker() {
-  const { Worker } = await import('node:worker_threads')
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-probe-worker-'))
-  const file = join(dir, 'w.js')
-  writeFileSync(file, "const { parentPort, workerData } = require('node:worker_threads'); parentPort.postMessage({ ok: true, n: workerData.n });")
+function service(ctx, key) {
+  const root = ctx.root !== undefined ? ctx.root : ctx
+  const registry = root.registry
+  if (registry !== undefined && typeof registry.values === 'function') {
+    for (const runtime of registry.values()) {
+      const fibers = runtime.fibers
+      if (fibers === undefined) continue
+      for (const fiber of fibers) {
+        const impl = fiber.store !== undefined ? fiber.store[key] : undefined
+        if (impl !== undefined && impl.value !== undefined) return impl.value
+      }
+    }
+  }
+  const local = ctx.get(key)
+  if (local !== undefined) return local
+  return undefined
+}
+
+async function probeWorker(ctx) {
+  if (ctx === undefined) throw new Error('worker probe needs a cordis ctx')
+  let runtime = service(ctx, 'codeRuntime')
+  if (runtime === undefined) {
+    const codeMod = await import('@deepseek-ai/dsh-code-runtime-worker-thread')
+    try {
+      await ctx.plugin(codeMod.default, {})
+    } catch (error) {
+      runtime = service(ctx, 'codeRuntime')
+      if (runtime === undefined) throw error
+    }
+    if (runtime === undefined) runtime = service(ctx, 'codeRuntime')
+  }
+  if (runtime === undefined || typeof runtime.run !== 'function') {
+    throw new Error('codeRuntime is not mounted')
+  }
+  const codeResult = await runtime.run({ program: 'return 7', bindings: [] })
+  if (codeResult.error !== undefined) {
+    throw new Error(`codeRuntime ${codeResult.error.kind}: ${codeResult.error.message}`)
+  }
+  if (codeResult.value !== 7) throw new Error(`codeRuntime value ${JSON.stringify(codeResult.value)}`)
+  let engine = service(ctx, 'workflowEngine')
+  if (engine === undefined) {
+    const wfMod = await import('@deepseek-ai/dsh-workflow-worker-thread')
+    try {
+      await ctx.plugin(wfMod.default, { provider: 'spawn', maxConcurrentAgents: 1 })
+    } catch (error) {
+      engine = service(ctx, 'workflowEngine')
+      if (engine === undefined) throw error
+    }
+    if (engine === undefined) engine = service(ctx, 'workflowEngine')
+  }
+  if (engine === undefined || typeof engine.start !== 'function') {
+    throw new Error('workflowEngine is not mounted')
+  }
+  const handle = engine.start({
+    script: 'return 1',
+    meta: { name: 'native-probe', description: 'worker-thread engine probe' },
+    parent: { id: 'native-probe-parent', options: {} },
+  })
   try {
-    await new Promise((resolve, reject) => {
-      const worker = new Worker(file, { workerData: { n: 7 } })
-      const timer = setTimeout(() => reject(new Error('worker timeout')), 5000)
-      worker.on('message', (msg) => {
-        clearTimeout(timer)
-        if (msg && msg.ok === true && msg.n === 7) {
-          ok('worker', { n: msg.n })
-          resolve()
-        } else reject(new Error(`worker message ${JSON.stringify(msg)}`))
-      })
-      worker.on('error', (err) => {
-        clearTimeout(timer)
-        reject(err)
-      })
-    })
+    const settled = await handle.result
+    if (settled.stopReason !== 'completed') {
+      throw new Error(`workflow stopReason ${String(settled.stopReason)} ${JSON.stringify(settled.error)}`)
+    }
+    if (settled.value !== 1) throw new Error(`workflow value ${JSON.stringify(settled.value)}`)
+    ok('worker', { code: 7, workflow: 1 })
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    await handle.dispose()
   }
 }
 
@@ -242,24 +286,28 @@ const families = {
   'fs-search': probeFsSearchSpawn,
 }
 
-async function runFamily(family) {
+async function runFamily(family, ctx) {
   if (family === 'all') {
     const names = Object.keys(families)
     for (let i = 0; i < names.length; i++) {
       const run = families[names[i]]
-      await run().catch((error) => fail(names[i], error))
+      await run(ctx).catch((error) => fail(names[i], error))
     }
     ok('all')
     return
   }
   const run = families[family]
   if (run === undefined) fail(family, new Error(`unknown family ${family}`))
-  await run().catch((error) => fail(family, error))
+  await run(ctx).catch((error) => fail(family, error))
 }
 
-export async function apply() {
+export async function apply(ctx) {
   const family = process.env.DSH_NATIVE_PROBE
   if (family === undefined || family === '') return
-  await runFamily(family)
-  process.exit(0)
+  try {
+    await runFamily(family, ctx)
+    process.exit(0)
+  } catch (error) {
+    fail(family, error)
+  }
 }

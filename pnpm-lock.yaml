@@ -8704,6 +8704,8 @@ importers:
         specifier: workspace:^
         version: link:../../workspace/workspace
 
+  packages/test-support/native-probe: {}
+
   packages/todo/tool-todo:
     dependencies:
       '@deepseek-ai/schemastery':

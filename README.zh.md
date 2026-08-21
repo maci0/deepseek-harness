@@ -17,7 +17,7 @@ chmod +x dsh
 ./dsh --profile web
 ```
 
-该命令会打印 `dsh web: http://127.0.0.1:<port>` 并提供浏览器 UI。未指定 `--port` 时，二进制会绑定空闲端口，以免与 3080 上的 Node dsh 冲突。请把 `dsh` 和 `package.json` 放在同一目录。
+该命令会打印 `dsh web: http://127.0.0.1:<port>` 并提供浏览器 UI。未指定 `--port` 时，二进制会绑定空闲端口，以免与 3080 上的 Node dsh 冲突。请把 `dsh` 与 `package.json`、`landlock-run` 以及 `dsh-*-worker.cjs` 放在同一目录。
 
 ```
 ./dsh -V

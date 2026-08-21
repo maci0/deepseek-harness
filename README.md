@@ -17,7 +17,7 @@ chmod +x dsh
 ./dsh --profile web
 ```
 
-That prints `dsh web: http://127.0.0.1:<port>` and serves the browser UI. With no `--port`, the binary binds a free port so it does not collide with a Node dsh on 3080. Keep `dsh` next to `package.json`.
+That prints `dsh web: http://127.0.0.1:<port>` and serves the browser UI. With no `--port`, the binary binds a free port so it does not collide with a Node dsh on 3080. Keep `dsh` next to `package.json`, `landlock-run`, and the `dsh-*-worker.cjs` files.
 
 ```
 ./dsh -V
