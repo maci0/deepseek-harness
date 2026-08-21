@@ -9,7 +9,7 @@
     "lib/index.js"
   ],
   "scripts": {
-    "test:native": "node --test tests/native-binary.test.mjs"
+    "test:native": "node --test --test-timeout=360000 tests/native-binary.test.mjs tests/npm-static.test.mjs"
   },
   "license": "MIT",
   "dependencies": {

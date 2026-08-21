@@ -8,7 +8,6 @@
 
 import { randomUUID } from 'node:crypto'
 import { availableParallelism } from 'node:os'
-import * as vm from 'node:vm'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import WorkflowEngine, { WorkflowError, WorkflowRunId } from '@deepseek-ai/dsh-workflow'
@@ -61,13 +60,14 @@ const META_STATEMENT = /^\s*export\s+const\s+meta\b/
  * opening with `export const meta` gets a pointed message instead of the
  * wrapper's bare SyntaxError — the model's likeliest authoring slip.
  */
-function assertBodyParses(body: string, name: string): void {
+function assertBodyParses(body: string, _name: string): void {
   if (META_STATEMENT.test(body)) {
     throw new WorkflowError('workflow meta rides the `meta` request field, not the script: remove the `export const meta = {...}` statement from the body', 'SCRIPT_PARSE')
   }
   try {
-    // Parse only — the script object is discarded, nothing executes.
-    void new vm.Script(`(async () => {\n${body}\n})()`, { filename: `workflow:${name}`, lineOffset: -1 })
+    // Parse only: constructing the function compiles the source and runs nothing.
+    // node:vm is not in scriptc's static builtin set (SC1010).
+    void new Function(`return (async () => {\n${body}\n})()`)
   } catch (error: unknown) {
     throw new WorkflowError(`workflow script does not parse: ${String(error)}`, 'SCRIPT_PARSE', { cause: error })
   }

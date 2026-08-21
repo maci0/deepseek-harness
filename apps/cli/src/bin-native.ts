@@ -17,7 +17,7 @@ if (process.argv[0] === 'scriptc' && !(process.env.DSH_HOME ?? '').trim()) {
 }
 
 function readVersion(): string {
-  return '0.1.0-rc.8+scriptc.33'
+  return '0.1.1-rc.2+scriptc.33'
 }
 
 const invocation = parseDshArgs(process.argv.slice(2), readVersion())

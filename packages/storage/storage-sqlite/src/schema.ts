@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-storage-sqlite/schema
  */
 
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
 import { mkdir, open } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { StorageError } from '@deepseek-ai/dsh-storage'
@@ -64,6 +64,7 @@ export async function openDatabase(path: string, journalMode: JournalMode): Prom
     await mkdir(dirname(actual), { recursive: true, mode: 0o700 })
     await createDatabaseFile(actual)
   }
+  const { DatabaseSync } = await import('node:sqlite')
   const db = new DatabaseSync(actual)
   try {
     configureDatabase(db, actual, journalMode)

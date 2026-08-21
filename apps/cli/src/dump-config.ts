@@ -29,10 +29,10 @@ const NAME = 'dsh'
  */
 export function runDumpConfig(profile: string, defaultOnly: boolean, patches: readonly string[]): void {
   const loaded = prepareProfile(profile, !defaultOnly)
-  const layers: ConfigDumpLayer[] = loaded.layers.map(layer => ({
-    label: layer.packageName,
-    patches: layer.patches,
-  }))
+  const layers: ConfigDumpLayer[] = []
+  for (const layer of loaded.layers) {
+    layers.push({ label: layer.packageName, patches: layer.patches })
+  }
   if (!defaultOnly) {
     if (existsSync(loaded.patchPath)) {
       layers.push({ label: loaded.patchPath, patches: loaded.patches })
