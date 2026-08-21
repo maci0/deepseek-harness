@@ -20,23 +20,30 @@ const workspaceRoot = resolve(repoRoot, '..')
 const defaultBin = join(workspaceRoot, 'dist/dsh')
 const bin = process.env.DSH_NATIVE_BIN ?? defaultBin
 const install = join(repoRoot, 'apps/cli/package.json')
-const home = join(tmpdir(), 'dsh-native-embed-home')
-mkdirSync(home, { recursive: true })
 
+/** Copy process.env, overlay `extra`, drop DSH_INSTALL. `undefined` values remove keys. */
 function nativeEnv(extra = {}) {
-  const env = { ...process.env, DSH_HOME: home, ...extra }
+  const env = { ...process.env }
   delete env.DSH_INSTALL
+  for (const [key, value] of Object.entries(extra)) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
+  }
   return env
 }
 
 function run(args) {
   assert.ok(existsSync(bin), `native binary missing: ${bin}`)
-  const result = spawnSync(bin, args, {
-    env: nativeEnv(),
-    encoding: 'utf8',
-    timeout: 45000,
-  })
-  return result
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-cli-'))
+  try {
+    return spawnSync(bin, args, {
+      env: nativeEnv({ DSH_HOME: dir }),
+      encoding: 'utf8',
+      timeout: 45000,
+    })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 test('native dsh --version', () => {
@@ -159,6 +166,11 @@ function assertRpcOk(method, { res, text }, dump) {
   assert.equal(res.status, 200, `/api/${method}: HTTP ${res.status}\n${text}\n${dump(`/api/${method}`)}`)
   const parsed = JSON.parse(text)
   assert.equal(parsed.type, 'server-response', `/api/${method}: not a server-response\n${text}`)
+  assert.notEqual(
+    parsed.result,
+    undefined,
+    `/api/${method}: missing result\n${text}\n${dump(`/api/${method}`)}`,
+  )
   assert.equal(parsed.result.ok, true, `/api/${method}: result.ok is false\n${text}\n${dump(`/api/${method}`)}`)
   return parsed
 }
@@ -198,11 +210,20 @@ test('native dsh --profile web stays up and serves HTTP', async () => {
   }
 })
 
-test('native dsh --profile web boots without DSH_HOME (uses ~/.dsh-native)', async () => {
-  const env = { ...process.env }
-  delete env.DSH_INSTALL
-  delete env.DSH_HOME
+test('native dsh --profile web boots without DSH_HOME (uses ~/.dsh-native)', async (t) => {
+  const isolatedHome = mkdtempSync(join(tmpdir(), 'dsh-native-user-home-'))
+  t.after(() => rmSync(isolatedHome, { recursive: true, force: true }))
+  assert.notEqual(isolatedHome, process.env.HOME, 'temp HOME must not be the real user home')
+  const env = nativeEnv({ HOME: isolatedHome, DSH_HOME: undefined })
+  if (process.platform === 'win32') env.USERPROFILE = isolatedHome
+  assert.equal(env.HOME, isolatedHome)
+  assert.equal(env.DSH_HOME, undefined)
   await bootWebAndFetch(env)
+  assert.equal(
+    existsSync(join(isolatedHome, '.dsh-native')),
+    true,
+    `native default home was not created under redirected HOME (${isolatedHome})`,
+  )
 })
 
 test('native dsh --profile web picks a free port when 3080 is taken', async () => {
@@ -210,13 +231,33 @@ test('native dsh --profile web picks a free port when 3080 is taken', async () =
   // (the suite then never reaches its own timeout).
   const occupier = spawn(process.execPath, ['-e', `
     const s = require('node:http').createServer();
-    s.on('error', (e) => { process.stderr.write(String(e.code || e) + '\\n'); process.exit(0); });
+    s.on('error', (e) => { process.stderr.write(String(e.code || e) + '\\n'); process.exit(1); });
     s.listen(3080, '127.0.0.1', () => process.stdout.write('ok\\n'));
   `], { stdio: ['ignore', 'pipe', 'pipe'] })
-  await Promise.race([
-    new Promise((resolve) => occupier.stdout.once('data', resolve)),
-    delay(2000),
+  occupier.stdout.setEncoding('utf8')
+  occupier.stderr.setEncoding('utf8')
+  let occupierOut = ''
+  let occupierErr = ''
+  const handshake = Promise.race([
+    new Promise((resolve, reject) => {
+      occupier.stdout.on('data', (chunk) => {
+        occupierOut += chunk
+        if (occupierOut.includes('ok')) resolve('ok')
+      })
+      occupier.stderr.on('data', (chunk) => { occupierErr += chunk })
+      occupier.once('exit', (code) => {
+        if (occupierOut.includes('ok')) return
+        reject(new Error(`3080 occupier exited ${code} without ok\nstdout:\n${occupierOut}\nstderr:\n${occupierErr}`))
+      })
+    }),
+    delay(2000).then(() => null),
   ])
+  const gotOk = await handshake
+  assert.equal(
+    gotOk,
+    'ok',
+    `3080 occupier did not print ok\nstdout:\n${occupierOut}\nstderr:\n${occupierErr}`,
+  )
   const bootHome = mkdtempSync(join(tmpdir(), 'dsh-native-web-busy-'))
   try {
     await bootWebAndFetch(nativeEnv({ DSH_HOME: bootHome }), [])
