@@ -781,4 +781,20 @@ describe('JsonlSessionPersistence: encoding selection', () => {
     await expect(ctx.sessionPersistence.append(header.id, oneTurnLog())).rejects.toThrow(/uses \.jsonl/)
     expect((await readdir(sessionDir(root, header.cwd, header.id))).some(name => name.endsWith('.jsonl.zstd'))).toBe(false)
   })
+
+  it('rechecks a late zstd artifact under a none-configured backend', async () => {
+    const root = await freshRoot()
+    const ctx = await mount(root, 'none')
+    expect(await ctx.sessionPersistence.list()).toEqual([])
+    const loadHeader = meta('late-zstd-load', '/late')
+    await mkdir(sessionDir(root, loadHeader.cwd, loadHeader.id), { recursive: true })
+    const jsonl = [
+      JSON.stringify(toHeaderLine(loadHeader)),
+      ...oneTurnLog().map(e => JSON.stringify(e)),
+      '',
+    ].join('\n')
+    await writeFile(logPath(root, loadHeader.cwd, loadHeader.id, 'zstd'), gzipSync(Buffer.from(jsonl)))
+    await expect(ctx.sessionPersistence.load(loadHeader.id)).rejects.toThrow(/uses \.jsonl\.zstd/)
+    await expect(ctx.sessionPersistence.list()).rejects.toThrow(/uses \.jsonl\.zstd/)
+  })
 })
