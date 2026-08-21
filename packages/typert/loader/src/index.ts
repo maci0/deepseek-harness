@@ -28,6 +28,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -36,6 +37,20 @@ import type { TypertContribution } from '@deepseek-ai/dsh-typert-registry/types'
 
 /** The package.json exports key naming a package's host-face typert artifact. */
 export const TYPERT_HOST_EXPORT = './typert'
+
+/**
+ * Specifier used to import a package's host-face typert artifact.
+ * Node imports the file URL resolved through the config-tree require (pnpm
+ * isolation hides sibling packages from this package's own URL). The scriptc
+ * island table is keyed by package subpath, not file:// URLs.
+ * @param pkgName - npm package name that exported `./typert`.
+ * @param artifactPath - absolute path of that export on disk.
+ * @returns the dynamic-import specifier for this runtime.
+ */
+export function typertModuleSpecifier(pkgName: string, artifactPath: string): string {
+  if (process.argv[0] === 'scriptc') return `${pkgName}/typert`
+  return pathToFileURL(artifactPath).href
+}
 
 /** Cordis plugin name. */
 export const name = 'typert-loader'
@@ -342,7 +357,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const loadManifest = (pkgName: string, path: string): Promise<TypertContribution> => {
     let loading = manifests.get(pkgName)
     if (loading === undefined) {
-      loading = import(`${pkgName}/typert`).then(
+      loading = import(typertModuleSpecifier(pkgName, path)).then(
         (mod: Record<string, unknown>) => validateTypertManifest(pkgName, mod.TYPERT),
         (cause: unknown) => {
           throw new Error(
