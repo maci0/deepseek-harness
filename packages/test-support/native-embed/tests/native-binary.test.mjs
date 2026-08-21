@@ -5,7 +5,7 @@
  * is the install anchor.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -432,6 +432,73 @@ function resolveErrorPattern(name) {
   return new RegExp(`cannot resolve module '${name.replace(/[/.]/g, '\\$&')}'`)
 }
 
+const YAML_BUNDLE_PACKAGES = new Set(['@deepseek-ai/dsh-base'])
+const YAML_NAME_RE = /name:\s*['"](@deepseek-ai\/[^'"]+)['"]/g
+const APPLY_RE = /export\s+(async\s+)?function\s+apply\b/
+
+function pkgNameOf(spec) {
+  const parts = spec.split('/')
+  return spec.startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0]
+}
+
+/** Walk a tree and push directory paths onto `stack`. */
+function walkDirs(start, skip, visitFile) {
+  const stack = [...start]
+  while (stack.length > 0) {
+    const dir = stack.pop()
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      if (skip.has(entry.name)) continue
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) stack.push(path)
+      else visitFile(path, entry.name)
+    }
+  }
+}
+
+/**
+ * Cordis plugins: `export function apply` packages plus YAML `name:` plugin rows
+ * (class plugins such as the e2b trio). Skip yaml-bundle composition packages.
+ */
+function listApplyPluginNames(root) {
+  const names = new Set()
+  walkDirs(
+    [join(root, 'packages'), join(root, 'vendor'), join(root, 'apps')],
+    new Set(['node_modules', 'lib']),
+    (path, name) => {
+      if (name !== 'package.json') return
+      const pkg = JSON.parse(readFileSync(path, 'utf8'))
+      if (typeof pkg.name !== 'string') return
+      const srcRoot = join(dirname(path), 'src')
+      walkDirs([srcRoot], new Set(['node_modules']), (srcPath, srcName) => {
+        if (!srcName.endsWith('.ts') && !srcName.endsWith('.tsx')) return
+        if (srcName === 'invariant.ts') return
+        if (APPLY_RE.test(readFileSync(srcPath, 'utf8'))) names.add(pkg.name)
+      })
+    },
+  )
+  walkDirs(
+    [join(root, 'packages'), join(root, 'vendor'), join(root, 'apps'), join(root, 'examples')],
+    new Set(['node_modules', 'lib']),
+    (path, name) => {
+      if (!name.endsWith('.yml') && !name.endsWith('.yaml')) return
+      const text = readFileSync(path, 'utf8')
+      YAML_NAME_RE.lastIndex = 0
+      let match
+      while ((match = YAML_NAME_RE.exec(text)) !== null) {
+        const pkg = pkgNameOf(match[1])
+        if (!YAML_BUNDLE_PACKAGES.has(pkg)) names.add(pkg)
+      }
+    },
+  )
+  return [...names].sort()
+}
+
 /** Spawn native web with a launcher `--patch` and wait for listen or exit. */
 function spawnWebPatch(env, patch, { timeoutMs = 20000 } = {}) {
   assert.ok(existsSync(bin), `native binary missing: ${bin}`)
@@ -469,14 +536,15 @@ async function stopChild(child) {
 
 const MISSING_ISLAND_NAME = '@deepseek-ai/dsh-definitely-not-embedded'
 
-test('native dsh resolves collected extra plugins', async () => {
+test('native dsh resolves every apply() plugin', async () => {
+  const applyNames = listApplyPluginNames(repoRoot)
+  assert.ok(applyNames.length > 0, 'no apply() packages found')
+  const embedSrc = readFileSync(join(here, '../src/bin.ts'), 'utf8')
+  const missingEmbed = applyNames.filter((name) => !new RegExp(`void import\\('${name.replace(/[/.]/g, '\\$&')}'\\)`).test(embedSrc))
+  assert.deepEqual(missingEmbed, [], `apply() packages missing void import(): ${missingEmbed.join(', ')}`)
   const extrasPath = join(here, '../collected-extras.json')
   const extras = JSON.parse(readFileSync(extrasPath, 'utf8'))
   assert.ok(Array.isArray(extras) && extras.length > 0, 'collected-extras.json is empty')
-  const embedSrc = readFileSync(join(here, '../src/bin.ts'), 'utf8')
-  for (const name of extras) {
-    assert.match(embedSrc, new RegExp(`void import\\('${name.replace(/[/.]/g, '\\$&')}'\\)`), `embed entry missing ${name}`)
-  }
 
   const missingDir = mkdtempSync(join(tmpdir(), 'dsh-native-missing-'))
   const missingPatch = writeInsertPatch(missingDir, [MISSING_ISLAND_NAME])
@@ -493,21 +561,23 @@ test('native dsh resolves collected extra plugins', async () => {
     rmSync(missingDir, { recursive: true, force: true })
   }
 
-  const allDir = mkdtempSync(join(tmpdir(), 'dsh-native-all-extras-'))
-  const allPatch = writeInsertPatch(allDir, extras)
+  const allDir = mkdtempSync(join(tmpdir(), 'dsh-native-all-apply-'))
+  const allPatch = writeInsertPatch(allDir, applyNames)
   try {
     const all = spawnWebPatch(nativeEnv({ DSH_HOME: allDir }), allPatch, { timeoutMs: 25000 })
     const result = await all.done
     const output = `${all.state.stdout}\n${all.state.stderr}`
     await stopChild(all.child)
     assert.doesNotMatch(output, /scriptc embeds npm code at build time/, output)
-    for (const name of extras) {
+    assert.doesNotMatch(output, /scr:import-trap/, output)
+    assert.doesNotMatch(output, /Could not find export 'default'/, output)
+    for (const name of applyNames) {
       assert.doesNotMatch(output, resolveErrorPattern(name), `native resolve failed for ${name}\n${output}`)
     }
     assert.match(
       output,
       /failed to (apply|import) loader entry|dsh web: http:\/\/127\.0\.0\.1:\d+/,
-      `extras overlay did not reach Cordis import()\n${output}`,
+      `apply() overlay did not reach Cordis import()\n${output}`,
     )
   } finally {
     rmSync(allDir, { recursive: true, force: true })
@@ -549,6 +619,44 @@ test('native dsh resolves collected extra plugins', async () => {
   } finally {
     await session.stop()
     rmSync(liveDir, { recursive: true, force: true })
+  }
+})
+
+test('native dsh --patch e2b trio does not import-trap', async () => {
+  const e2bNames = [
+    '@deepseek-ai/dsh-e2b',
+    '@deepseek-ai/dsh-fs-e2b',
+    '@deepseek-ai/dsh-subprocess-e2b',
+  ]
+  const applyNames = listApplyPluginNames(repoRoot)
+  for (const name of e2bNames) {
+    assert.ok(applyNames.includes(name), `${name} missing from apply()/YAML plugin scan`)
+  }
+  const embedSrc = readFileSync(join(here, '../src/bin.ts'), 'utf8')
+  for (const name of e2bNames) {
+    assert.match(embedSrc, new RegExp(`void import\\('${name.replace(/[/.]/g, '\\$&')}'\\)`), `${name} missing void import()`)
+  }
+  const e2bDir = mkdtempSync(join(tmpdir(), 'dsh-native-e2b-trio-'))
+  const e2bPatch = writeInsertPatch(e2bDir, e2bNames)
+  try {
+    const e2b = spawnWebPatch(nativeEnv({ DSH_HOME: e2bDir }), e2bPatch, { timeoutMs: 25000 })
+    await e2b.done
+    const output = `${e2b.state.stdout}\n${e2b.state.stderr}`
+    await stopChild(e2b.child)
+    assert.doesNotMatch(output, /scr:import-trap/, output)
+    assert.doesNotMatch(output, /Could not find export 'default'/, output)
+    assert.doesNotMatch(output, /#ansi-styles/, output)
+    assert.doesNotMatch(output, /failed to import loader entry/, output)
+    for (const name of e2bNames) {
+      assert.doesNotMatch(output, resolveErrorPattern(name), `native resolve failed for ${name}\n${output}`)
+    }
+    assert.match(
+      output,
+      /failed to apply loader entry|dsh web: http:\/\/127\.0\.0\.1:\d+/,
+      `e2b trio overlay did not reach Cordis import()\n${output}`,
+    )
+  } finally {
+    rmSync(e2bDir, { recursive: true, force: true })
   }
 })
 
