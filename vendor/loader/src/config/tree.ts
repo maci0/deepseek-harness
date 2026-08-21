@@ -57,7 +57,10 @@ export abstract class EntryTree {
         .filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
         .map(outcome => outcome.reason)
       if (failures.length === 1) throw failures[0]
-      if (failures.length > 1) throw new AggregateError(failures, 'loader fibers failed')
+      if (failures.length > 1) {
+        const detail = failures.map((reason) => reason instanceof Error ? reason.message : String(reason)).join(' | ')
+        throw new AggregateError(failures, `loader fibers failed: ${detail}`)
+      }
       this.ctx.reflect.notify(['loader'])
       if (!this.getTasks().length) return
     }

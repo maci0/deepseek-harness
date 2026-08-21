@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createProcessShutdown,
+  recordNodeExitCode,
   PROCESS_SHUTDOWN_TIMEOUT_MS,
 } from '../src/process-shutdown.ts'
+import {
+  createProfileShutdown,
+  installNodeComplete,
+  resetNodeComplete,
+} from '../src/process-shutdown-core.ts'
 
 function deferred(): { promise: Promise<void>; resolve: () => void; reject: (error: Error) => void } {
   let resolve!: () => void
@@ -17,9 +25,16 @@ function deferred(): { promise: Promise<void>; resolve: () => void; reject: (err
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  resetNodeComplete()
 })
 
 describe('process shutdown', () => {
+  it('runProfile constructs shutdown through createProfileShutdown', () => {
+    const src = readFileSync(fileURLToPath(new URL('../src/profile-boot.ts', import.meta.url)), 'utf8')
+    expect(src).toMatch(/createProfileShutdown\(/)
+    expect(src).not.toMatch(/forceExit,\s*\n\s*forceExit/)
+  })
+
   it('completes naturally after disposal resolves and forces exit when it rejects', async () => {
     const resolvedExit = vi.fn()
     const resolvedComplete = vi.fn()
@@ -42,6 +57,44 @@ describe('process shutdown', () => {
     expect(rejectedComplete).not.toHaveBeenCalled()
   })
 
+  it('createProfileShutdown records exitCode after Node bin install', async () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
+    const originalExitCode = process.exitCode
+    process.exitCode = undefined
+    installNodeComplete(recordNodeExitCode)
+    const shutdown = createProfileShutdown(() => Promise.resolve())
+
+    try {
+      await shutdown.shutdown(7)
+
+      expect(process.exitCode).toBe(7)
+      expect(exit).not.toHaveBeenCalled()
+    } finally {
+      process.exitCode = originalExitCode
+    }
+  })
+
+  it('createProfileShutdown exits immediately on scriptc', async () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
+    const originalArgv0 = process.argv[0] ?? 'node'
+    const originalExitCode = process.exitCode
+    process.argv[0] = 'scriptc'
+    process.exitCode = undefined
+    installNodeComplete(recordNodeExitCode)
+    const shutdown = createProfileShutdown(() => Promise.resolve())
+
+    try {
+      await shutdown.shutdown(7)
+
+      expect(exit).toHaveBeenCalledOnce()
+      expect(exit).toHaveBeenCalledWith(7)
+      expect(process.exitCode).toBeUndefined()
+    } finally {
+      process.argv[0] = originalArgv0
+      process.exitCode = originalExitCode
+    }
+  })
+
   it('uses process.exitCode for default normal completion', async () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
     const originalExitCode = process.exitCode
@@ -54,6 +107,26 @@ describe('process shutdown', () => {
       expect(process.exitCode).toBe(7)
       expect(exit).not.toHaveBeenCalled()
     } finally {
+      process.exitCode = originalExitCode
+    }
+  })
+
+  it('exits immediately on scriptc for default normal completion', async () => {
+    const exit = vi.spyOn(process, 'exit').mockImplementation(_code => undefined as never)
+    const originalArgv0 = process.argv[0] ?? 'node'
+    const originalExitCode = process.exitCode
+    process.argv[0] = 'scriptc'
+    process.exitCode = undefined
+    const shutdown = createProcessShutdown(() => Promise.resolve())
+
+    try {
+      await shutdown.shutdown(7)
+
+      expect(exit).toHaveBeenCalledOnce()
+      expect(exit).toHaveBeenCalledWith(7)
+      expect(process.exitCode).toBeUndefined()
+    } finally {
+      process.argv[0] = originalArgv0
       process.exitCode = originalExitCode
     }
   })
