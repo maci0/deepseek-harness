@@ -401,9 +401,10 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   }
   // scriptc island.import of a module with top-level await treats the
   // fulfilled module namespace as an uncaught [object] once the entry
-  // promise settles. Long-lived web stays on this promise until a signal
-  // or cmdline exit calls process.exit.
-  if (ctx.get('webServer') !== undefined) {
+  // promise settles. Long-lived native web stays on this promise until a
+  // signal or cmdline exit calls process.exit. Node must return so bin.ts
+  // can finish and SIGTERM can drain via process.exitCode.
+  if (nativeIsland && ctx.get('webServer') !== undefined) {
     await new Promise<void>(() => {})
   }
   return { ctx, shutdown }
