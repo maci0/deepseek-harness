@@ -3,7 +3,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { appendFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { gzipSync } from 'node:zlib'
 import { performance } from 'node:perf_hooks'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -377,6 +378,39 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
     expect(scanned.events.map(event => event.type)).toEqual(oneTurnLog().map(event => event.type))
   })
 
+  it('scriptc lists a plaintext session.jsonl under default zstd config', async () => {
+    const argv0 = process.argv[0] ?? 'node'
+    process.argv[0] = 'scriptc'
+    try {
+      const root = await freshRoot()
+      const header = meta('plain-jsonl-neighbor', '/work')
+      const dir = sessionDir(root, '/work', header.id)
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'session.jsonl'), `${JSON.stringify(toHeaderLine(header))}\n`)
+      const ctx = await mount(root)
+      const listed = await ctx.sessionPersistence.list()
+      expect(listed.map(item => item.id)).toContain(header.id)
+      const created = meta('scriptc-new-session', '/work')
+      await expect(ctx.sessionPersistence.create(created)).resolves.toBeUndefined()
+    } finally {
+      process.argv[0] = argv0
+    }
+  })
+
+  it('readRaw decodes a gzip member stored under the zstd suffix', async () => {
+    const root = await freshRoot()
+    const ctx = await mount(root)
+    const header = meta('raw-read-gzip', '/work')
+    await ctx.sessionPersistence.create(header)
+    const artifact = logPath(root, '/work', header.id, 'zstd')
+    await mkdir(dirname(artifact), { recursive: true })
+    const jsonl = `${JSON.stringify(toHeaderLine(header))}\n`
+    await writeFile(artifact, gzipSync(Buffer.from(jsonl)))
+    const raw = await ctx.sessionPersistence.readRaw(header.id)
+    expect(raw?.filename).toBe('session.jsonl')
+    expect(raw?.content).toBe(jsonl)
+  })
+
   it('readRaw rejects a present zstd artifact that carries no frame', async () => {
     const root = await freshRoot()
     const ctx = await mount(root)
@@ -746,5 +780,21 @@ describe('JsonlSessionPersistence: encoding selection', () => {
     ].join('\n'))
     await expect(ctx.sessionPersistence.append(header.id, oneTurnLog())).rejects.toThrow(/uses \.jsonl/)
     expect((await readdir(sessionDir(root, header.cwd, header.id))).some(name => name.endsWith('.jsonl.zstd'))).toBe(false)
+  })
+
+  it('rechecks a late zstd artifact under a none-configured backend', async () => {
+    const root = await freshRoot()
+    const ctx = await mount(root, 'none')
+    expect(await ctx.sessionPersistence.list()).toEqual([])
+    const loadHeader = meta('late-zstd-load', '/late')
+    await mkdir(sessionDir(root, loadHeader.cwd, loadHeader.id), { recursive: true })
+    const jsonl = [
+      JSON.stringify(toHeaderLine(loadHeader)),
+      ...oneTurnLog().map(e => JSON.stringify(e)),
+      '',
+    ].join('\n')
+    await writeFile(logPath(root, loadHeader.cwd, loadHeader.id, 'zstd'), gzipSync(Buffer.from(jsonl)))
+    await expect(ctx.sessionPersistence.load(loadHeader.id)).rejects.toThrow(/uses \.jsonl\.zstd/)
+    await expect(ctx.sessionPersistence.list()).rejects.toThrow(/uses \.jsonl\.zstd/)
   })
 })
