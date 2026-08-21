@@ -476,6 +476,20 @@ function resolveErrorPattern(name) {
 const YAML_BUNDLE_PACKAGES = new Set(['@deepseek-ai/dsh-base'])
 const YAML_NAME_RE = /name:\s*['"](@deepseek-ai\/[^'"]+)['"]/g
 const APPLY_RE = /export\s+(async\s+)?function\s+apply\b/
+const ABSTRACT_SERVICE_RE = /export\s+abstract\s+class\s+(\w+)\s+extends\s+Service\b/g
+const CONCRETE_SERVICE_RE = /export\s+class\s+(\w+)\s+extends\s+Service\b/g
+const DEFAULT_EXPORT_RE = /export\s+default\s+(\w+)\b/g
+
+/** True when src/index.ts default-exports a concrete Cordis Service class. */
+function isDefaultServicePlugin(text) {
+  const abstract = new Set([...text.matchAll(ABSTRACT_SERVICE_RE)].map((match) => match[1]))
+  const concrete = new Set([...text.matchAll(CONCRETE_SERVICE_RE)].map((match) => match[1]))
+  for (const match of text.matchAll(DEFAULT_EXPORT_RE)) {
+    const ident = match[1]
+    if (concrete.has(ident) && !abstract.has(ident)) return true
+  }
+  return false
+}
 
 function pkgNameOf(spec) {
   const parts = spec.split('/')
@@ -513,13 +527,16 @@ function listApplyPluginNames(root) {
     new Set(['node_modules', 'lib']),
     (path, name) => {
       if (name !== 'package.json') return
+      if (path.includes('/tests/fixtures/')) return
       const pkg = JSON.parse(readFileSync(path, 'utf8'))
-      if (typeof pkg.name !== 'string') return
+      if (typeof pkg.name !== 'string' || !pkg.name.startsWith('@deepseek-ai/')) return
       const srcRoot = join(dirname(path), 'src')
       walkDirs([srcRoot], new Set(['node_modules']), (srcPath, srcName) => {
         if (!srcName.endsWith('.ts') && !srcName.endsWith('.tsx')) return
         if (srcName === 'invariant.ts') return
-        if (APPLY_RE.test(readFileSync(srcPath, 'utf8'))) names.add(pkg.name)
+        const text = readFileSync(srcPath, 'utf8')
+        if (APPLY_RE.test(text)) names.add(pkg.name)
+        if (srcName === 'index.ts' && isDefaultServicePlugin(text)) names.add(pkg.name)
       })
     },
   )
@@ -550,17 +567,28 @@ function spawnWebPatch(env, patch, { timeoutMs = 20000 } = {}) {
   const state = { stdout: '', stderr: '' }
   child.stdout.setEncoding('utf8')
   child.stderr.setEncoding('utf8')
-  child.stdout.on('data', (chunk) => { state.stdout += chunk })
-  child.stderr.on('data', (chunk) => { state.stderr += chunk })
   const done = new Promise((resolve) => {
+    let settled = false
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      clearTimeout(deadline)
+      resolve(result)
+    }
     const deadline = setTimeout(() => {
       const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
-      resolve({ kind: match ? 'listen' : 'timeout', url: match?.[1], code: child.exitCode })
+      finish({ kind: match ? 'listen' : 'timeout', url: match?.[1], code: child.exitCode })
     }, timeoutMs)
-    child.once('exit', (code, signal) => {
-      clearTimeout(deadline)
+    const onChunk = (chunk) => {
+      state.stdout += chunk
       const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
-      resolve({ kind: match ? 'listen' : 'exit', url: match?.[1], code, signal })
+      if (match) finish({ kind: 'listen', url: match[1], code: child.exitCode })
+    }
+    child.stdout.on('data', onChunk)
+    child.stderr.on('data', (chunk) => { state.stderr += chunk })
+    child.once('exit', (code, signal) => {
+      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
+      finish({ kind: match ? 'listen' : 'exit', url: match?.[1], code, signal })
     })
   })
   return { child, state, done }
@@ -698,6 +726,40 @@ test('native dsh --patch e2b trio does not import-trap', async () => {
     )
   } finally {
     rmSync(e2bDir, { recursive: true, force: true })
+  }
+})
+
+test('native dsh --patch authorization and invariants do not import-trap', async () => {
+  const names = [
+    '@deepseek-ai/dsh-authorization',
+    '@deepseek-ai/dsh-invariants',
+  ]
+  const applyNames = listApplyPluginNames(repoRoot)
+  const embedSrc = readFileSync(join(here, '../src/bin.ts'), 'utf8')
+  for (const name of names) {
+    assert.ok(applyNames.includes(name), `${name} missing from apply()/YAML/Service plugin scan`)
+    assert.match(embedSrc, new RegExp(`void import\\('${name.replace(/[/.]/g, '\\$&')}'\\)`), `${name} missing void import()`)
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-auth-inv-'))
+  const patch = writeInsertPatch(dir, names)
+  try {
+    const spawned = spawnWebPatch(nativeEnv({ DSH_HOME: dir }), patch, { timeoutMs: 25000 })
+    await spawned.done
+    const output = `${spawned.state.stdout}\n${spawned.state.stderr}`
+    await stopChild(spawned.child)
+    assert.doesNotMatch(output, /scr:import-trap/, output)
+    assert.doesNotMatch(output, /Could not find export 'default'/, output)
+    assert.doesNotMatch(output, /failed to import loader entry/, output)
+    for (const name of names) {
+      assert.doesNotMatch(output, resolveErrorPattern(name), `native resolve failed for ${name}\n${output}`)
+    }
+    assert.match(
+      output,
+      /failed to apply loader entry|dsh web: http:\/\/127\.0\.0\.1:\d+/,
+      `authorization overlay did not reach Cordis import()\n${output}`,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })
 
