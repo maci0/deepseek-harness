@@ -11,28 +11,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listApplyPlugins } from './list-plugins.mjs'
 
-const DEGRADED = new Map([
-  ['@deepseek-ai/cordis-plugin-hmr', 'native boot skips HMR'],
-  ['@deepseek-ai/dsh-attachment-local', 'sharp stubbed'],
-  ['@deepseek-ai/dsh-bash-sandbox', 'landlock addon missing'],
-  ['@deepseek-ai/dsh-client-hmr', 'native boot skips HMR'],
-  ['@deepseek-ai/dsh-code-runtime-worker-thread', 'Worker constructor throws'],
-  ['@deepseek-ai/dsh-cordis-client-runner', 'cannot load client packages from disk'],
-  ['@deepseek-ai/dsh-cordis-host-runner', 'Function eval, no node:vm; no runtime npm install'],
-  ['@deepseek-ai/dsh-host-directory-picker-auto', 'forces browse backend on scriptc'],
-  ['@deepseek-ai/dsh-host-directory-picker-native', 'execFile/spawn stub'],
-  ['@deepseek-ai/dsh-sandbox-local', 'landlock addon missing'],
-  ['@deepseek-ai/dsh-session-query-sqlite', 'node:sqlite trap'],
-  ['@deepseek-ai/dsh-storage-sqlite', 'node:sqlite trap'],
-  ['@deepseek-ai/dsh-subprocess-local', 'node-pty and spawn stubbed'],
-  ['@deepseek-ai/dsh-terminal', 'needs PTY'],
-  ['@deepseek-ai/dsh-terminal-bash', 'needs PTY'],
-  ['@deepseek-ai/dsh-tool-bash-persistent', 'needs PTY'],
-  ['@deepseek-ai/dsh-tool-fs-search', 'rg via spawn; spawnSync may still work'],
-  ['@deepseek-ai/dsh-tool-pwsh-persistent', 'needs PTY'],
-  ['@deepseek-ai/dsh-tool-terminal', 'needs PTY'],
-  ['@deepseek-ai/dsh-workflow-worker-thread', 'Worker constructor throws'],
-])
+const DEGRADED = new Map()
 
 const LIVE = new Set([
   '@deepseek-ai/dsh-schedule',

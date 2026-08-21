@@ -701,6 +701,63 @@ test('native dsh settings.openDocument hands the file to xdg-open', async () => 
   }
 })
 
+function probe(family) {
+  assert.ok(existsSync(bin), `native binary missing: ${bin}`)
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-probe-'))
+  try {
+    const patch = writeInsertPatch(dir, ['@deepseek-ai/dsh-native-probe'])
+    const result = spawnSync(bin, ['--profile', 'web', '--patch', patch, '--no-open', '--port', '0'], {
+      env: nativeEnv({ DSH_HOME: dir, DSH_NATIVE_PROBE: family }),
+      encoding: 'utf8',
+      timeout: 60000,
+    })
+    return result
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+test('native sqlite persist-or-query works (storage-sqlite / node:sqlite)', () => {
+  const r = probe('sqlite')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.match(r.stdout, /"ok":true/)
+  assert.doesNotMatch(r.stdout + r.stderr, /sqlite trap|not supported|no SQLite/)
+})
+
+test('native spawn and execFile work', () => {
+  for (const family of ['spawn', 'execFile', 'fs-search']) {
+    const r = probe(family)
+    assert.equal(r.status, 0, `${family}: ${r.stdout}${r.stderr}`)
+    assert.match(r.stdout, /"ok":true/)
+    assert.doesNotMatch(r.stdout + r.stderr, /is not available in the scriptc island/)
+  }
+})
+
+test('native PTY spawn works', () => {
+  const r = probe('pty')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.match(r.stdout, /"ok":true/)
+  assert.doesNotMatch(r.stdout + r.stderr, /node-pty is not available/)
+})
+
+test('native sharp and landlock work', () => {
+  const sharp = probe('sharp')
+  assert.equal(sharp.status, 0, sharp.stdout + sharp.stderr)
+  assert.match(sharp.stdout, /"ok":true/)
+  assert.doesNotMatch(sharp.stdout + sharp.stderr, /sharp is not available/)
+  const landlock = probe('landlock')
+  assert.equal(landlock.status, 0, landlock.stdout + landlock.stderr)
+  assert.match(landlock.stdout, /"ok":true/)
+})
+
+test('native Worker, watch/HMR, cordis runners, and directory-picker work', () => {
+  for (const family of ['worker', 'watch', 'host-runner', 'client-runner', 'directory-picker']) {
+    const r = probe(family)
+    assert.equal(r.status, 0, `${family}: ${r.stdout}${r.stderr}`)
+    assert.match(r.stdout, /"ok":true/)
+  }
+})
+
 test('native dsh --profile web hands the URL to xdg-open', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-native-xdg-'))
   const opener = join(dir, 'xdg-open')

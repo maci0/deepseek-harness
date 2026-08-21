@@ -5,6 +5,10 @@
   "private": true,
   "type": "module",
   "main": "lib/index.js",
+  "exports": {
+    ".": "./src/bin.ts",
+    "./package.json": "./package.json"
+  },
   "files": [
     "lib/index.js"
   ],

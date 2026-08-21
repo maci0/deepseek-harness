@@ -38,8 +38,8 @@ chmod +x dsh
 ## 限制
 
 - 仅 Linux x86_64
-- `sharp`、`node-pty`、`koffi` 和 landlock 被 stub（没有 `process.dlopen`）
-- `node:sqlite` 在首次真正使用时抛错。默认持久化是 JSONL
+- `koffi` 仍是空 stub（没有 `process.dlopen`）。sharp 准入、node-pty 和 landlock 使用 island 替代（`landlock-run` 与 `dsh` 同目录）
+- 默认持久化仍是 JSONL；挂上 sqlite 插件时可以使用 `node:sqlite`
 - `dsh plugin ...` 被 stub
 - Island HTTP 没有 WebSocket upgrade。事件流使用 SSE（Server-Sent Events）（`GET /api/events.mux`）
 - 动态包的 host 半边用 `Function` 求值，不用 `node:vm`。忙循环不会被打断

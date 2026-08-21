@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const YAML_BUNDLE_PACKAGES = new Set(['@deepseek-ai/dsh-base'])
+const SKIP_PACKAGES = new Set(['@deepseek-ai/dsh-native-probe'])
 const YAML_NAME_RE = /name:\s*['"](@deepseek-ai\/[^'"]+)['"]/g
 const APPLY_RE = /export\s+(async\s+)?function\s+apply\b/
 const ABSTRACT_SERVICE_RE = /export\s+abstract\s+class\s+(\w+)\s+extends\s+Service\b/g
@@ -75,6 +76,7 @@ export function listApplyPlugins(root) {
       if (path.includes('/tests/fixtures/')) return
       const pkg = JSON.parse(readFileSync(path, 'utf8'))
       if (typeof pkg.name !== 'string' || !pkg.name.startsWith('@deepseek-ai/')) return
+      if (SKIP_PACKAGES.has(pkg.name)) return
       const dir = dirname(path)
       pkgDirByName.set(pkg.name, dir)
       const srcRoot = join(dir, 'src')

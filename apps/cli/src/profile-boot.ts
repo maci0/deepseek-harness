@@ -360,7 +360,6 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
     process.exit(1)
   }
   app.current = ctx
-  const nativeIsland = process.argv[0] === 'scriptc'
   // A surface can dispose the whole tree while boot or this post-boot watcher
   // setup is still in flight — a signal, or a fast one-shot's appExit. Loader
   // presence and fiber state own liveness; the initial check skips a tree
@@ -368,8 +367,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // landed mid-setup. Watching is unconditional: a one-shot surface exits
   // through its bounded shutdown, which disposes the watchers before the
   // loop drains.
-  if (!nativeIsland
-    && !signalShutdown.signal.aborted
+  if (!signalShutdown.signal.aborted
     && ctx.fiber.state === FIBER_ACTIVE
     && ctx.get('loader') !== undefined) {
     try {
@@ -405,7 +403,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // promise settles. Long-lived native web stays on this promise until a
   // signal or cmdline exit calls process.exit. Node must return so bin.ts
   // can finish and SIGTERM can drain via process.exitCode.
-  if (nativeIsland && ctx.get('webServer') !== undefined) {
+  if (process.argv[0] === 'scriptc' && ctx.get('webServer') !== undefined) {
     await new Promise<void>(() => {})
   }
   return { ctx, shutdown }

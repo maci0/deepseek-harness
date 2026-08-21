@@ -118,9 +118,22 @@ class Hmr extends Service {
   constructor(ctx: Context, public config: Hmr.Config) {
     super(ctx, 'hmr')
     if (!this.ctx.loader.internal) {
-      throw new Error('--expose-internals is required for HMR service')
+      if (process.argv[0] === 'scriptc') {
+        this.internal = {
+          version: 'v1',
+          loadCache: {
+            get() { return undefined },
+            has() { return false },
+            set() { return this },
+            delete() { return false },
+          },
+        } as typeof this.internal
+      } else {
+        throw new Error('--expose-internals is required for HMR service')
+      }
+    } else {
+      this.internal = this.ctx.loader.internal
     }
-    this.internal = this.ctx.loader.internal
     this.baseDir = fileURLToPath(new URL(config.base || '.', ctx.baseUrl))
   }
 

@@ -38,8 +38,8 @@ Per-plugin directory, native compile status (`embedded` / `embedded-degraded` / 
 ## Limits
 
 - Linux x86_64 only
-- `sharp`, `node-pty`, `koffi`, and landlock are stubbed (no `process.dlopen`)
-- `node:sqlite` throws on first real use. Default persistence is JSONL
+- `koffi` is still a no-op (no `process.dlopen`). sharp admission, node-pty, and landlock use island substitutes (`landlock-run` next to `dsh`)
+- Default persistence is JSONL; `node:sqlite` is available when a sqlite plugin is mounted
 - `dsh plugin ...` is stubbed
 - Island HTTP has no WebSocket upgrade. Event streams use SSE (`GET /api/events.mux`)
 - Dynamic package host halves evaluate with `Function`, not `node:vm`. Tight loops are not interrupted

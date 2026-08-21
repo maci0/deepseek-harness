@@ -12,8 +12,8 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 ## Counts
 
 - inventoried: 182
-- embedded: 163
-- embedded-degraded: 19
+- embedded: 182
+- embedded-degraded: 0
 - not-embedded: 0
 - npm-static static: 182
 - npm-static island fallback: 0
@@ -25,7 +25,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 
 | Package | Directory | Embed | npm-static | Tested | Note |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/cordis-plugin-hmr` | `vendor/hmr` | embedded-degraded | static | yes (boot, resolve) | native boot skips HMR |
+| `@deepseek-ai/cordis-plugin-hmr` | `vendor/hmr` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/cordis-plugin-include` | `vendor/include` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/cordis-plugin-logger-console` | `vendor/logger-console` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/cordis-plugin-timer` | `vendor/timer` | embedded | static | yes (boot, resolve) |  |
@@ -40,12 +40,12 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-agent-tool-presentation` | `packages/core/agent-tool-presentation` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-api-gateway` | `packages/api/gateway` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-api-remotes` | `packages/api/remotes` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-attachment-local` | `packages/attachment/attachment-local` | embedded-degraded | static | yes (boot, resolve) | sharp stubbed |
+| `@deepseek-ai/dsh-attachment-local` | `packages/attachment/attachment-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-authorization` | `packages/credentials/authorization` | embedded | static | yes (e2e, resolve) |  |
 | `@deepseek-ai/dsh-bash-local` | `packages/shell/bash-local` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-bash-sandbox` | `packages/shell/bash-sandbox` | embedded-degraded | static | yes (boot, resolve) | landlock addon missing |
+| `@deepseek-ai/dsh-bash-sandbox` | `packages/shell/bash-sandbox` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-connection` | `packages/client/connection` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-client-hmr` | `packages/client/hmr` | embedded-degraded | static | yes (boot, resolve) | native boot skips HMR |
+| `@deepseek-ai/dsh-client-hmr` | `packages/client/hmr` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-locale` | `packages/client/locale` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-modules` | `packages/client/modules` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-runtime` | `packages/client/runtime` | embedded | static | yes (boot, resolve) |  |
@@ -82,15 +82,15 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-client-ui-user-questions` | `packages/client/ui-user-questions` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-ui-workflow-run` | `packages/client/ui-workflow-run` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-ui-workspace` | `packages/client/ui-workspace` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-code-runtime-worker-thread` | `packages/code-runtime/code-runtime-worker-thread` | embedded-degraded | static | yes (boot, resolve) | Worker constructor throws |
+| `@deepseek-ai/dsh-code-runtime-worker-thread` | `packages/code-runtime/code-runtime-worker-thread` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-command-compact` | `packages/compaction/command-compact` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-command-feedback` | `packages/feedback/command-feedback` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-command-goal` | `packages/goal/command-goal` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-commands` | `packages/interaction/commands` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-compaction-basic` | `packages/compaction/compaction-basic` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-compaction-tool-result-pruner` | `packages/compaction/compaction-tool-result-pruner` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-cordis-client-runner` | `packages/extensions/cordis-client-runner` | embedded-degraded | static | yes (boot, resolve) | cannot load client packages from disk |
-| `@deepseek-ai/dsh-cordis-host-runner` | `packages/extensions/cordis-host-runner` | embedded-degraded | static | yes (boot, resolve) | Function eval, no node:vm; no runtime npm install |
+| `@deepseek-ai/dsh-cordis-client-runner` | `packages/extensions/cordis-client-runner` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-cordis-host-runner` | `packages/extensions/cordis-host-runner` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-credentials-local` | `packages/credentials/credentials-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-e2b` | `packages/e2b/e2b` | embedded | static | yes (e2e, resolve) |  |
 | `@deepseek-ai/dsh-experimental-agent-team` | `packages/experimental/agent-team` | embedded | static | yes (resolve) |  |
@@ -106,7 +106,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-hooks-claude-code` | `packages/hooks/hooks-claude-code` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-hooks-codex` | `packages/hooks/hooks-codex` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-host-apiproxy` | `packages/host/apiproxy` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-host-directory-picker-auto` | `packages/host/directory-picker-auto` | embedded-degraded | static | yes (boot, resolve) | forces browse backend on scriptc |
+| `@deepseek-ai/dsh-host-directory-picker-auto` | `packages/host/directory-picker-auto` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-host-directory-picker-browse` | `packages/host/directory-picker-browse` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-host-frontend-static` | `packages/host/frontend-static` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-host-plugin-inventory` | `packages/host/plugin-inventory` | embedded | static | yes (boot, resolve) |  |
@@ -128,7 +128,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-pwsh-local` | `packages/shell/pwsh-local` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-pwsh-sandbox` | `packages/shell/pwsh-sandbox` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-repeat-tool-reminder` | `packages/guard/repeat-tool-reminder` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-sandbox-local` | `packages/sandbox/sandbox-local` | embedded-degraded | static | yes (boot, resolve) | landlock addon missing |
+| `@deepseek-ai/dsh-sandbox-local` | `packages/sandbox/sandbox-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-sandbox-policy` | `packages/sandbox/sandbox-policy` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-schedule` | `packages/schedule/schedule` | embedded | static | yes (live, resolve) |  |
 | `@deepseek-ai/dsh-sdk-jsonrpc-server` | `packages/sdk/server` | embedded | static | yes (live, resolve) |  |
@@ -138,7 +138,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-session-persistence-jsonl` | `packages/session/session-persistence-jsonl` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-projection` | `packages/session/session-projection` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-projection-cache` | `packages/session/session-projection-cache` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-session-query-sqlite` | `packages/session-query/session-query-sqlite` | embedded-degraded | static | yes (boot, resolve) | node:sqlite trap |
+| `@deepseek-ai/dsh-session-query-sqlite` | `packages/session-query/session-query-sqlite` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-reference` | `packages/context/session-reference` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-stats` | `packages/session/session-stats` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-telemetry-otel` | `packages/session/session-telemetry-otel` | embedded | static | yes (boot, resolve) |  |
@@ -155,7 +155,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-storage` | `packages/storage/storage` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-storage-domain` | `packages/storage/storage-domain` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-storage-json` | `packages/storage/storage-json` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-storage-sqlite` | `packages/storage/storage-sqlite` | embedded-degraded | static | yes (resolve) | node:sqlite trap |
+| `@deepseek-ai/dsh-storage-sqlite` | `packages/storage/storage-sqlite` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-subagent` | `packages/subagent/subagent` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-subagent-acp` | `packages/subagent/subagent-acp` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-subagent-claude-code` | `packages/subagent/subagent-claude-code` | embedded | static | yes (resolve) |  |
@@ -164,25 +164,25 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-subagent-fork-in-process` | `packages/subagent/subagent-fork-in-process` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-subagent-spawn-in-process` | `packages/subagent/subagent-spawn-in-process` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-subprocess-e2b` | `packages/e2b/subprocess-e2b` | embedded | static | yes (e2e, resolve) |  |
-| `@deepseek-ai/dsh-subprocess-local` | `packages/subprocess/subprocess-local` | embedded-degraded | static | yes (boot, resolve) | node-pty and spawn stubbed |
+| `@deepseek-ai/dsh-subprocess-local` | `packages/subprocess/subprocess-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-system-prompt` | `packages/core/system-prompt` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-terminal` | `packages/terminal/terminal` | embedded-degraded | static | yes (resolve) | needs PTY |
-| `@deepseek-ai/dsh-terminal-bash` | `packages/terminal/terminal-bash` | embedded-degraded | static | yes (resolve) | needs PTY |
+| `@deepseek-ai/dsh-terminal` | `packages/terminal/terminal` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-terminal-bash` | `packages/terminal/terminal-bash` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-time-context` | `packages/context/time-context` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-tmux-context` | `packages/context/tmux-context` | embedded | static | yes (live, resolve) |  |
 | `@deepseek-ai/dsh-token-meter` | `packages/llm/token-meter` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-ask-user` | `packages/interaction/tool-ask-user` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-tool-bash` | `packages/shell/tool-bash` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-bash-persistent` | `packages/shell/tool-bash-persistent` | embedded-degraded | static | yes (resolve) | needs PTY |
+| `@deepseek-ai/dsh-tool-bash-persistent` | `packages/shell/tool-bash-persistent` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `packages/guard/timeout-policy` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-cordis` | `packages/extensions/tool-cordis` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-tool-fs` | `packages/fs/tool-fs` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-fs-search` | `packages/fs/tool-fs-search` | embedded-degraded | static | yes (boot, resolve) | rg via spawn; spawnSync may still work |
+| `@deepseek-ai/dsh-tool-fs-search` | `packages/fs/tool-fs-search` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-goal` | `packages/goal/tool-goal` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-jobs` | `packages/jobs/tool-jobs` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-lsp` | `packages/lsp/tool-lsp` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-tool-pwsh` | `packages/shell/tool-pwsh` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-pwsh-persistent` | `packages/shell/tool-pwsh-persistent` | embedded-degraded | static | yes (resolve) | needs PTY |
+| `@deepseek-ai/dsh-tool-pwsh-persistent` | `packages/shell/tool-pwsh-persistent` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-tool-ralph` | `packages/workflow/tool-ralph` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-session-query` | `packages/session-query/tool-session-query` | embedded | static | yes (live, resolve) |  |
 | `@deepseek-ai/dsh-tool-skill` | `packages/skill/tool-skill` | embedded | static | yes (boot, resolve) |  |
@@ -190,7 +190,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-tool-subagent` | `packages/subagent/tool-subagent` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-subagent-control` | `packages/subagent/tool-subagent-control` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-subagent-report` | `packages/subagent/tool-subagent-report` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-terminal` | `packages/terminal/tool-terminal` | embedded-degraded | static | yes (resolve) | needs PTY |
+| `@deepseek-ai/dsh-tool-terminal` | `packages/terminal/tool-terminal` | embedded | static | yes (resolve) |  |
 | `@deepseek-ai/dsh-tool-todo` | `packages/todo/tool-todo` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-web` | `packages/web/tool-web` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-workflow` | `packages/workflow/tool-workflow` | embedded | static | yes (boot, resolve) |  |
@@ -205,5 +205,5 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-web-search-deepseek` | `packages/web/web-search-deepseek` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-web-search-exa` | `packages/web/web-search-exa` | embedded | static | yes (live, resolve) |  |
 | `@deepseek-ai/dsh-web-search-perplexity` | `packages/web/web-search-perplexity` | embedded | static | yes (live, resolve) |  |
-| `@deepseek-ai/dsh-workflow-worker-thread` | `packages/workflow/workflow-worker-thread` | embedded-degraded | static | yes (boot, resolve) | Worker constructor throws |
+| `@deepseek-ai/dsh-workflow-worker-thread` | `packages/workflow/workflow-worker-thread` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-workspace` | `packages/workspace/workspace` | embedded | static | yes (boot, resolve) |  |

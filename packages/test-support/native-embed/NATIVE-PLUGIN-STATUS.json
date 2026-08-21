@@ -1,8 +1,8 @@
 {
   "counts": {
     "total": 182,
-    "embedded": 163,
-    "degraded": 19,
+    "embedded": 182,
+    "degraded": 0,
     "missing": 0,
     "staticHits": 182,
     "fallback": 0,
@@ -15,10 +15,10 @@
       "name": "@deepseek-ai/cordis-plugin-hmr",
       "dir": "vendor/hmr",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "native boot skips HMR"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/cordis-plugin-include",
@@ -150,10 +150,10 @@
       "name": "@deepseek-ai/dsh-attachment-local",
       "dir": "packages/attachment/attachment-local",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "sharp stubbed"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-authorization",
@@ -177,10 +177,10 @@
       "name": "@deepseek-ai/dsh-bash-sandbox",
       "dir": "packages/shell/bash-sandbox",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "landlock addon missing"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-client-connection",
@@ -195,10 +195,10 @@
       "name": "@deepseek-ai/dsh-client-hmr",
       "dir": "packages/client/hmr",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "native boot skips HMR"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-client-locale",
@@ -528,10 +528,10 @@
       "name": "@deepseek-ai/dsh-code-runtime-worker-thread",
       "dir": "packages/code-runtime/code-runtime-worker-thread",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "Worker constructor throws"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-command-compact",
@@ -591,19 +591,19 @@
       "name": "@deepseek-ai/dsh-cordis-client-runner",
       "dir": "packages/extensions/cordis-client-runner",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "cannot load client packages from disk"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-cordis-host-runner",
       "dir": "packages/extensions/cordis-host-runner",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "Function eval, no node:vm; no runtime npm install"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-credentials-local",
@@ -744,10 +744,10 @@
       "name": "@deepseek-ai/dsh-host-directory-picker-auto",
       "dir": "packages/host/directory-picker-auto",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "forces browse backend on scriptc"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-host-directory-picker-browse",
@@ -942,10 +942,10 @@
       "name": "@deepseek-ai/dsh-sandbox-local",
       "dir": "packages/sandbox/sandbox-local",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "landlock addon missing"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-sandbox-policy",
@@ -1032,10 +1032,10 @@
       "name": "@deepseek-ai/dsh-session-query-sqlite",
       "dir": "packages/session-query/session-query-sqlite",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "node:sqlite trap"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-session-reference",
@@ -1185,10 +1185,10 @@
       "name": "@deepseek-ai/dsh-storage-sqlite",
       "dir": "packages/storage/storage-sqlite",
       "kinds": "apply",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (resolve)",
-      "note": "node:sqlite trap"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-subagent",
@@ -1266,10 +1266,10 @@
       "name": "@deepseek-ai/dsh-subprocess-local",
       "dir": "packages/subprocess/subprocess-local",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "node-pty and spawn stubbed"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-system-prompt",
@@ -1284,19 +1284,19 @@
       "name": "@deepseek-ai/dsh-terminal",
       "dir": "packages/terminal/terminal",
       "kinds": "service+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (resolve)",
-      "note": "needs PTY"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-terminal-bash",
       "dir": "packages/terminal/terminal-bash",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (resolve)",
-      "note": "needs PTY"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-time-context",
@@ -1347,10 +1347,10 @@
       "name": "@deepseek-ai/dsh-tool-bash-persistent",
       "dir": "packages/shell/tool-bash-persistent",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (resolve)",
-      "note": "needs PTY"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-call-timeout-policy",
@@ -1383,10 +1383,10 @@
       "name": "@deepseek-ai/dsh-tool-fs-search",
       "dir": "packages/fs/tool-fs-search",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "rg via spawn; spawnSync may still work"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-goal",
@@ -1428,10 +1428,10 @@
       "name": "@deepseek-ai/dsh-tool-pwsh-persistent",
       "dir": "packages/shell/tool-pwsh-persistent",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (resolve)",
-      "note": "needs PTY"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-ralph",
@@ -1500,10 +1500,10 @@
       "name": "@deepseek-ai/dsh-tool-terminal",
       "dir": "packages/terminal/tool-terminal",
       "kinds": "apply+yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (resolve)",
-      "note": "needs PTY"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-todo",
@@ -1635,10 +1635,10 @@
       "name": "@deepseek-ai/dsh-workflow-worker-thread",
       "dir": "packages/workflow/workflow-worker-thread",
       "kinds": "yaml",
-      "embed": "embedded-degraded",
+      "embed": "embedded",
       "npmStatic": "static",
       "tested": "yes (boot, resolve)",
-      "note": "Worker constructor throws"
+      "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-workspace",

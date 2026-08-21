@@ -202,6 +202,7 @@ export function embedDefaultProfilePlugins(): void {
   void import('@deepseek-ai/dsh-web-fetch-http')
   void import('@deepseek-ai/dsh-web-search-exa')
   void import('@deepseek-ai/dsh-web-search-perplexity')
+  void import('@deepseek-ai/dsh-native-probe')
 }
 
 if (process.argv.length < 0) embedDefaultProfilePlugins()

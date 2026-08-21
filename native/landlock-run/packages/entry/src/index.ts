@@ -69,6 +69,9 @@ export interface LauncherGrants {
 export function launcherPath(
   resolvePackageJson: (specifier: string) => string = createRequire(import.meta.url).resolve,
 ): string {
+  if (process.argv[0] === 'scriptc') {
+    return join(dirname(process.execPath), LAUNCHER_BIN)
+  }
   const platformPackage = `@deepseek-ai/node-addon-landlock-run-${process.platform}-${process.arch}`
   try {
     return join(dirname(resolvePackageJson(`${platformPackage}/package.json`)), 'bin', LAUNCHER_BIN)
