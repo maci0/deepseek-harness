@@ -15,7 +15,6 @@ import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
   boot,
   composeEntries,
@@ -29,6 +28,9 @@ import {
   type Profile,
 } from '@deepseek-ai/dsh-app-boot'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+
+/** JSON-safe patch row. Named include types do not stringify under scriptc. */
+type PatchOptions = { [key: string]: unknown }
 
 /**
  * Absolute path of this dsh installation's package.json.
@@ -187,19 +189,18 @@ interface ComposedProfile {
 function allPatches(composed: ComposedProfile): PatchOptions[] {
   // scriptc SC1090: array spread arguments do not compile; concat does.
   return composed.bundlePatches.concat(
-    composed.profile.patches,
+    composed.profile.patches as PatchOptions[],
     composed.homePatches,
     composed.overlays,
   )
 }
 
 /** JSON-shaped clone of island patch rows. structuredClone cannot clone them. */
-type PatchJson = string | number | boolean | PatchJson[] | { [key: string]: PatchJson }
-
 function clonePatchList(patches: PatchOptions[]): PatchOptions[] {
   const text = JSON.stringify(patches)
-  const cloned = JSON.parse(text) as PatchJson[]
-  return cloned as unknown as PatchOptions[]
+  const cloned = JSON.parse(text)
+  if (!Array.isArray(cloned)) throw new Error('clonePatchList: expected array')
+  return cloned
 }
 
 /**
@@ -218,22 +219,22 @@ function composeProfile(
   patchFiles: readonly string[],
 ): ComposedProfile {
   const profile = prepareProfile(name)
-  const homePatches = loadOptionalPatches(NAME, homePatchPath()) ?? []
+  const homePatches = (loadOptionalPatches(NAME, homePatchPath()) ?? []) as PatchOptions[]
   // scriptc island Array.flatMap over yaml-loaded overlay lists can nest the
   // patch rows, so Include never sees `insert`. Concat matches dump-config.
   let overlays: PatchOptions[] = []
   for (const file of patchFiles) {
-    overlays = overlays.concat(loadOverlayPatches(NAME, resolve(file)))
+    overlays = overlays.concat(loadOverlayPatches(NAME, resolve(file)) as PatchOptions[])
   }
   let bundlePatches: PatchOptions[] = []
   for (const layer of profile.layers) {
-    bundlePatches = bundlePatches.concat(layer.patches)
+    bundlePatches = bundlePatches.concat(layer.patches as PatchOptions[])
   }
   // scriptc SC1090: Map values may not be function-bearing records, and
   // `typeof` on a statically-typed field is fenced. Index ids as booleans.
   const rowIds: Record<string, boolean> = {}
   let agentPresetsConfig: Record<string, unknown> | undefined
-  for (const row of composeEntries([bundlePatches, profile.patches, homePatches, overlays])) {
+  for (const row of composeEntries([bundlePatches, profile.patches as PatchOptions[], homePatches, overlays])) {
     const id = row.id
     if (id === '') continue
     rowIds[id] = true
@@ -333,8 +334,8 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // removing the override could never revert the row to the bundle default.
   const composeLive = (): PatchOptions[] => clonePatchList(
     composed.bundlePatches.concat(
-      loadOptionalPatches(NAME, composed.profile.patchPath) ?? [],
-      loadOptionalPatches(NAME, homePatchPath()) ?? [],
+      (loadOptionalPatches(NAME, composed.profile.patchPath) ?? []) as PatchOptions[],
+      (loadOptionalPatches(NAME, homePatchPath()) ?? []) as PatchOptions[],
       composed.overlays,
     ),
   )
@@ -388,12 +389,12 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       await watchUserPatches(ctx, {
         binName: NAME,
         filename: composed.profile.patchPath,
-        compose: composeLive,
+        compose: () => composeLive(),
       })
       await watchUserPatches(ctx, {
         binName: NAME,
         filename: homePatchPath(),
-        compose: composeLive,
+        compose: () => composeLive(),
       })
     } catch (error) {
       suppressShutdownError(ctx, signalShutdown.signal, error)
