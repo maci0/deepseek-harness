@@ -114,6 +114,7 @@ export function parseCmdline(ctx: Context, program: Command): void {
     // program.error() into a CommanderError; commander has already written the
     // text through the output configured above.
     if (!isCommanderError(error)) throw error
+    ctx.provide('cmdlineTerminal', true)
     exit(error.exitCode)
   }
 }
