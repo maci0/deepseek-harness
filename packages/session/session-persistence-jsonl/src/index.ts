@@ -113,6 +113,10 @@ function isENOENT(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }
 
+function logCompression(path: string): JsonlCompression {
+  return path.endsWith('.jsonl.zstd') ? 'zstd' : 'none'
+}
+
 /**
  * The JSONL persistence backend. Load as a plugin; it registers as
  * `ctx.sessionPersistence` and (via the coordinator) installs the write-path
@@ -260,7 +264,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     const path = await this.findLog(id, signal)
     if (path === undefined) return undefined
     const { buffer } = await this.readStableFile(path, signal)
-    const content = this.decodeLogBuffer(buffer)
+    const content = this.decodeLogBuffer(buffer, logCompression(path))
     const meta = parseHeaderMeta(content.split('\n', 1)[0] as string)
     if (meta === undefined || meta.id !== id) {
       throw new Error(`corrupt session log: invalid header line in "${path}"`)
@@ -304,7 +308,8 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     const { buffer, revision } = await this.readStableFile(path, signal)
     let prefix: Omit<StoredPrefix<JsonlTornMarker>, 'revision'>
     try {
-      if (isGzipBuffer(buffer) || buffer[0] === 0x7b) {
+      const asJsonl = logCompression(path) === 'none' || isGzipBuffer(buffer) || buffer[0] === 0x7b
+      if (asJsonl) {
         const decoded = Buffer.from(isGzipBuffer(buffer) ? decodeGzipLog(buffer) : buffer.toString('utf8'))
         signal?.throwIfAborted()
         const { meta, events, committedBytes } = scanLog(decoded)
@@ -922,8 +927,18 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     const noneExists = await this.exists(nonePath)
     const zstdExists = await this.exists(zstdPath)
     if (noneExists && zstdExists) throw this.encodingMismatch(nonePath)
-    if (noneExists) return { path: nonePath, compression: 'none' }
-    if (zstdExists) return { path: zstdPath, compression: 'zstd' }
+    if (noneExists) {
+      if (process.argv[0] !== 'scriptc' && this.compression !== 'none') {
+        throw this.encodingMismatch(nonePath)
+      }
+      return { path: nonePath, compression: 'none' }
+    }
+    if (zstdExists) {
+      if (process.argv[0] !== 'scriptc' && this.compression !== 'zstd') {
+        throw this.encodingMismatch(zstdPath)
+      }
+      return { path: zstdPath, compression: 'zstd' }
+    }
     return undefined
   }
 
@@ -934,8 +949,9 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     return this.artifactInDir(sessionDir(this.root, cwd, id))
   }
 
-  private decodeLogBuffer(buffer: Buffer): string {
-    if (buffer.length === 0) return ''
+  private decodeLogBuffer(buffer: Buffer, compression: JsonlCompression): string {
+    if (compression === 'none') return buffer.toString('utf8')
+    if (buffer.length === 0) throw new Error('empty or header-less Zstandard session log')
     if (isGzipBuffer(buffer)) return decodeGzipLog(buffer)
     if (buffer[0] === 0x7b) return buffer.toString('utf8')
     const { frames } = scanZstdFrames(buffer)
