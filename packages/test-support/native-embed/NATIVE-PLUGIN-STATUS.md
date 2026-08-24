@@ -17,7 +17,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 - not-embedded: 0
 - npm-static static: 182
 - npm-static island fallback: 0
-- tested boot (default web dump-config): 132
+- tested boot (default web dump-config): 182
 - tested live (inventory after patch): 8
 - tested e2e (named native test): 5
 
@@ -26,23 +26,23 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | Package | Directory | Embed | npm-static | Tested | Note |
 | --- | --- | --- | --- | --- | --- |
 | `@deepseek-ai/cordis-plugin-hmr` | `vendor/hmr` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/cordis-plugin-include` | `vendor/include` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/cordis-plugin-logger-console` | `vendor/logger-console` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/cordis-plugin-include` | `vendor/include` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/cordis-plugin-logger-console` | `vendor/logger-console` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/cordis-plugin-timer` | `vendor/timer` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-acp` | `packages/acp/acp` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-acp-demo` | `packages/examples/acp-demo` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-acp` | `packages/acp/acp` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-acp-demo` | `packages/examples/acp-demo` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-agent` | `packages/core/agent` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-agent-default-model` | `packages/core/agent-default-model` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-agent-instructions` | `packages/context/agent-instructions` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-agent-loop` | `packages/core/agent-loop` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-agent-presets` | `packages/preset/agent-presets` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-agent-spine-demo` | `packages/examples/agent-spine-demo` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-agent-tool-presentation` | `packages/core/agent-tool-presentation` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-agent-spine-demo` | `packages/examples/agent-spine-demo` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-agent-tool-presentation` | `packages/core/agent-tool-presentation` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-api-gateway` | `packages/api/gateway` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-api-remotes` | `packages/api/remotes` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-attachment-local` | `packages/attachment/attachment-local` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-authorization` | `packages/credentials/authorization` | embedded | static | yes (e2e, resolve) |  |
-| `@deepseek-ai/dsh-bash-local` | `packages/shell/bash-local` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-authorization` | `packages/credentials/authorization` | embedded | static | yes (e2e, boot, resolve) |  |
+| `@deepseek-ai/dsh-bash-local` | `packages/shell/bash-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-bash-sandbox` | `packages/shell/bash-sandbox` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-connection` | `packages/client/connection` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-hmr` | `packages/client/hmr` | embedded | static | yes (boot, resolve) |  |
@@ -56,8 +56,8 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-client-ui-conversation` | `packages/client/ui-conversation` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-ui-cordis` | `packages/extensions/ui-cordis` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-ui-deliverables` | `packages/client/ui-deliverables` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-client-ui-directory-picker-browse` | `packages/client/ui-directory-picker-browse` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-client-ui-directory-picker-native` | `packages/client/ui-directory-picker-native` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-client-ui-directory-picker-browse` | `packages/client/ui-directory-picker-browse` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-client-ui-directory-picker-native` | `packages/client/ui-directory-picker-native` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-ui-goal` | `packages/client/ui-goal` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-ui-input-trigger` | `packages/client/ui-input-trigger` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-client-ui-jobs` | `packages/client/ui-jobs` | embedded | static | yes (boot, resolve) |  |
@@ -92,46 +92,46 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-cordis-client-runner` | `packages/extensions/cordis-client-runner` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-cordis-host-runner` | `packages/extensions/cordis-host-runner` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-credentials-local` | `packages/credentials/credentials-local` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-e2b` | `packages/e2b/e2b` | embedded | static | yes (e2e, resolve) |  |
-| `@deepseek-ai/dsh-experimental-agent-team` | `packages/experimental/agent-team` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-experimental-tool-agent-team` | `packages/experimental/tool-agent-team` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-e2b` | `packages/e2b/e2b` | embedded | static | yes (e2e, boot, resolve) |  |
+| `@deepseek-ai/dsh-experimental-agent-team` | `packages/experimental/agent-team` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-experimental-tool-agent-team` | `packages/experimental/tool-agent-team` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-file-reference-local` | `packages/context/file-reference-local` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-fs-e2b` | `packages/e2b/fs-e2b` | embedded | static | yes (e2e, resolve) |  |
-| `@deepseek-ai/dsh-fs-local` | `packages/fs/fs-local` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-fs-e2b` | `packages/e2b/fs-e2b` | embedded | static | yes (e2e, boot, resolve) |  |
+| `@deepseek-ai/dsh-fs-local` | `packages/fs/fs-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-fs-observation-policy` | `packages/fs/fs-observation-policy` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-fs-sandbox` | `packages/fs/fs-sandbox` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-goal` | `packages/goal/goal` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-goal-round-driver` | `packages/goal/goal-round-driver` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-headless` | `packages/bundle/headless` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-hooks-claude-code` | `packages/hooks/hooks-claude-code` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-hooks-codex` | `packages/hooks/hooks-codex` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-headless` | `packages/bundle/headless` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-hooks-claude-code` | `packages/hooks/hooks-claude-code` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-hooks-codex` | `packages/hooks/hooks-codex` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-host-apiproxy` | `packages/host/apiproxy` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-host-directory-picker-auto` | `packages/host/directory-picker-auto` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-host-directory-picker-browse` | `packages/host/directory-picker-browse` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-host-frontend-static` | `packages/host/frontend-static` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-host-directory-picker-browse` | `packages/host/directory-picker-browse` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-host-frontend-static` | `packages/host/frontend-static` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-host-plugin-inventory` | `packages/host/plugin-inventory` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-host-webserver` | `packages/host/webserver` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-invariants` | `packages/runtime-diagnostics/invariants` | embedded | static | yes (e2e, resolve) |  |
+| `@deepseek-ai/dsh-invariants` | `packages/runtime-diagnostics/invariants` | embedded | static | yes (e2e, boot, resolve) |  |
 | `@deepseek-ai/dsh-jobs-local` | `packages/jobs/jobs-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-llm` | `packages/llm/llm` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-llm-deepseek` | `packages/llm/llm-deepseek` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-llm-pi-ai` | `packages/llm/llm-pi-ai` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-llm-replay` | `packages/test-support/llm-replay` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-llm-replay` | `packages/test-support/llm-replay` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-llm-retry` | `packages/llm/llm-retry` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-lsp` | `packages/lsp/lsp` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-lsp-stdio` | `packages/lsp/lsp-stdio` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-mcp-client` | `packages/mcp/mcp-client` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-lsp` | `packages/lsp/lsp` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-lsp-stdio` | `packages/lsp/lsp-stdio` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-mcp-client` | `packages/mcp/mcp-client` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-message-feedback` | `packages/feedback/message-feedback` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-permission-presets` | `packages/interaction/permission-presets` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-persona` | `packages/preset/persona` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-persona` | `packages/preset/persona` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-plan-mode` | `packages/plan/plan-mode` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-pwsh-local` | `packages/shell/pwsh-local` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-pwsh-local` | `packages/shell/pwsh-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-pwsh-sandbox` | `packages/shell/pwsh-sandbox` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-repeat-tool-reminder` | `packages/guard/repeat-tool-reminder` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-sandbox-local` | `packages/sandbox/sandbox-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-sandbox-policy` | `packages/sandbox/sandbox-policy` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-schedule` | `packages/schedule/schedule` | embedded | static | yes (live, resolve) |  |
-| `@deepseek-ai/dsh-sdk-jsonrpc-server` | `packages/sdk/server` | embedded | static | yes (live, resolve) |  |
+| `@deepseek-ai/dsh-schedule` | `packages/schedule/schedule` | embedded | static | yes (live, boot, resolve) |  |
+| `@deepseek-ai/dsh-sdk-jsonrpc-server` | `packages/sdk/server` | embedded | static | yes (live, boot, resolve) |  |
 | `@deepseek-ai/dsh-session` | `packages/core/session` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-checkpoint-policy` | `packages/session/session-checkpoint-policy` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-log-export` | `packages/session-query/session-log-export` | embedded | static | yes (boot, resolve) |  |
@@ -143,7 +143,7 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-session-stats` | `packages/session/session-stats` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-telemetry-otel` | `packages/session/session-telemetry-otel` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-title` | `packages/session/session-title` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-session-title-all-prompts-llm` | `packages/session/session-title-all-prompts-llm` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-session-title-all-prompts-llm` | `packages/session/session-title-all-prompts-llm` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-session-title-first-prompt-llm` | `packages/session/session-title-first-prompt-llm` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-settings-file` | `packages/settings/settings-file` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-shell-env` | `packages/shell/shell-env` | embedded | static | yes (boot, resolve) |  |
@@ -155,42 +155,42 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-storage` | `packages/storage/storage` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-storage-domain` | `packages/storage/storage-domain` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-storage-json` | `packages/storage/storage-json` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-storage-sqlite` | `packages/storage/storage-sqlite` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-storage-sqlite` | `packages/storage/storage-sqlite` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-subagent` | `packages/subagent/subagent` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-subagent-acp` | `packages/subagent/subagent-acp` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-subagent-claude-code` | `packages/subagent/subagent-claude-code` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-subagent-codex` | `packages/subagent/subagent-codex` | embedded | static | yes (live, resolve) |  |
-| `@deepseek-ai/dsh-subagent-dsh-sdk` | `packages/subagent/subagent-dsh-sdk` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-subagent-acp` | `packages/subagent/subagent-acp` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-subagent-claude-code` | `packages/subagent/subagent-claude-code` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-subagent-codex` | `packages/subagent/subagent-codex` | embedded | static | yes (live, boot, resolve) |  |
+| `@deepseek-ai/dsh-subagent-dsh-sdk` | `packages/subagent/subagent-dsh-sdk` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-subagent-fork-in-process` | `packages/subagent/subagent-fork-in-process` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-subagent-spawn-in-process` | `packages/subagent/subagent-spawn-in-process` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-subprocess-e2b` | `packages/e2b/subprocess-e2b` | embedded | static | yes (e2e, resolve) |  |
+| `@deepseek-ai/dsh-subprocess-e2b` | `packages/e2b/subprocess-e2b` | embedded | static | yes (e2e, boot, resolve) |  |
 | `@deepseek-ai/dsh-subprocess-local` | `packages/subprocess/subprocess-local` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-system-prompt` | `packages/core/system-prompt` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-terminal` | `packages/terminal/terminal` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-terminal-bash` | `packages/terminal/terminal-bash` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-time-context` | `packages/context/time-context` | embedded | static | yes (resolve) |  |
-| `@deepseek-ai/dsh-tmux-context` | `packages/context/tmux-context` | embedded | static | yes (live, resolve) |  |
+| `@deepseek-ai/dsh-terminal` | `packages/terminal/terminal` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-terminal-bash` | `packages/terminal/terminal-bash` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-time-context` | `packages/context/time-context` | embedded | static | yes (boot, resolve) |  |
+| `@deepseek-ai/dsh-tmux-context` | `packages/context/tmux-context` | embedded | static | yes (live, boot, resolve) |  |
 | `@deepseek-ai/dsh-token-meter` | `packages/llm/token-meter` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-ask-user` | `packages/interaction/tool-ask-user` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-tool-ask-user` | `packages/interaction/tool-ask-user` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-bash` | `packages/shell/tool-bash` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-bash-persistent` | `packages/shell/tool-bash-persistent` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-tool-bash-persistent` | `packages/shell/tool-bash-persistent` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `packages/guard/timeout-policy` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-cordis` | `packages/extensions/tool-cordis` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-tool-cordis` | `packages/extensions/tool-cordis` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-fs` | `packages/fs/tool-fs` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-fs-search` | `packages/fs/tool-fs-search` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-goal` | `packages/goal/tool-goal` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-jobs` | `packages/jobs/tool-jobs` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-lsp` | `packages/lsp/tool-lsp` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-tool-lsp` | `packages/lsp/tool-lsp` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-pwsh` | `packages/shell/tool-pwsh` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-pwsh-persistent` | `packages/shell/tool-pwsh-persistent` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-tool-pwsh-persistent` | `packages/shell/tool-pwsh-persistent` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-ralph` | `packages/workflow/tool-ralph` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-session-query` | `packages/session-query/tool-session-query` | embedded | static | yes (live, resolve) |  |
+| `@deepseek-ai/dsh-tool-session-query` | `packages/session-query/tool-session-query` | embedded | static | yes (live, boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-skill` | `packages/skill/tool-skill` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `packages/fs/tool-str-replace-editor` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-subagent` | `packages/subagent/tool-subagent` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-subagent-control` | `packages/subagent/tool-subagent-control` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-subagent-report` | `packages/subagent/tool-subagent-report` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-tool-terminal` | `packages/terminal/tool-terminal` | embedded | static | yes (resolve) |  |
+| `@deepseek-ai/dsh-tool-terminal` | `packages/terminal/tool-terminal` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-todo` | `packages/todo/tool-todo` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-web` | `packages/web/tool-web` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-tool-workflow` | `packages/workflow/tool-workflow` | embedded | static | yes (boot, resolve) |  |
@@ -201,9 +201,9 @@ Do not edit the table by hand. Re-run the generator after a native rebuild.
 | `@deepseek-ai/dsh-user-questions` | `packages/interaction/user-questions` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-web` | `packages/web/web` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-web-app` | `packages/bundle/web-app` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-web-fetch-http` | `packages/web/web-fetch-http` | embedded | static | yes (live, resolve) |  |
+| `@deepseek-ai/dsh-web-fetch-http` | `packages/web/web-fetch-http` | embedded | static | yes (live, boot, resolve) |  |
 | `@deepseek-ai/dsh-web-search-deepseek` | `packages/web/web-search-deepseek` | embedded | static | yes (boot, resolve) |  |
-| `@deepseek-ai/dsh-web-search-exa` | `packages/web/web-search-exa` | embedded | static | yes (live, resolve) |  |
-| `@deepseek-ai/dsh-web-search-perplexity` | `packages/web/web-search-perplexity` | embedded | static | yes (live, resolve) |  |
+| `@deepseek-ai/dsh-web-search-exa` | `packages/web/web-search-exa` | embedded | static | yes (live, boot, resolve) |  |
+| `@deepseek-ai/dsh-web-search-perplexity` | `packages/web/web-search-perplexity` | embedded | static | yes (live, boot, resolve) |  |
 | `@deepseek-ai/dsh-workflow-worker-thread` | `packages/workflow/workflow-worker-thread` | embedded | static | yes (boot, resolve) |  |
 | `@deepseek-ai/dsh-workspace` | `packages/workspace/workspace` | embedded | static | yes (boot, resolve) |  |

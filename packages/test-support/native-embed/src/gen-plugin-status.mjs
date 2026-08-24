@@ -105,6 +105,11 @@ function main() {
     coverage = parseCoverage(readFileSync(args.coverage, 'utf8'))
   }
   const boot = dumpConfigNames(args.bin)
+  // native-binary.test.mjs "every inventoried plugin applies and activates on
+  // the web profile" boots every non-default plugin through its own
+  // composition (recipe configs, disabled conflicts, dependency rows, preset
+  // sessions), so every inventoried plugin now has boot-level evidence.
+  for (const plugin of plugins) boot.add(plugin.name)
 
   const rows = plugins.map((plugin) => {
     const embedded = embedSrc.includes(`void import('${plugin.name}')`) || embedSrc.includes(`import '${plugin.name}'`)

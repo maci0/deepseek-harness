@@ -6,7 +6,7 @@
     "missing": 0,
     "staticHits": 182,
     "fallback": 0,
-    "boot": 132,
+    "boot": 182,
     "live": 8,
     "e2e": 5
   },
@@ -26,7 +26,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -35,7 +35,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -53,7 +53,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -62,7 +62,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -116,7 +116,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -125,7 +125,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -161,7 +161,7 @@
       "kinds": "service",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (e2e, resolve)",
+      "tested": "yes (e2e, boot, resolve)",
       "note": ""
     },
     {
@@ -170,7 +170,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -296,7 +296,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -305,7 +305,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -620,7 +620,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (e2e, resolve)",
+      "tested": "yes (e2e, boot, resolve)",
       "note": ""
     },
     {
@@ -629,7 +629,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -638,7 +638,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -656,7 +656,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (e2e, resolve)",
+      "tested": "yes (e2e, boot, resolve)",
       "note": ""
     },
     {
@@ -665,7 +665,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -710,7 +710,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -719,7 +719,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -728,7 +728,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -755,7 +755,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -764,7 +764,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -791,7 +791,7 @@
       "kinds": "service",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (e2e, resolve)",
+      "tested": "yes (e2e, boot, resolve)",
       "note": ""
     },
     {
@@ -836,7 +836,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -854,7 +854,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -863,7 +863,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -872,7 +872,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -899,7 +899,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -917,7 +917,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -962,7 +962,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {
@@ -971,7 +971,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {
@@ -1079,7 +1079,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1187,7 +1187,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1205,7 +1205,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1214,7 +1214,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1223,7 +1223,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {
@@ -1232,7 +1232,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1259,7 +1259,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (e2e, resolve)",
+      "tested": "yes (e2e, boot, resolve)",
       "note": ""
     },
     {
@@ -1286,7 +1286,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1295,7 +1295,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1304,7 +1304,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1313,7 +1313,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {
@@ -1331,7 +1331,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1349,7 +1349,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1367,7 +1367,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1412,7 +1412,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1430,7 +1430,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1448,7 +1448,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {
@@ -1502,7 +1502,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (resolve)",
+      "tested": "yes (boot, resolve)",
       "note": ""
     },
     {
@@ -1601,7 +1601,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {
@@ -1619,7 +1619,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {
@@ -1628,7 +1628,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, resolve)",
+      "tested": "yes (live, boot, resolve)",
       "note": ""
     },
     {

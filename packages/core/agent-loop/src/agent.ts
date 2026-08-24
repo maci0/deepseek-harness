@@ -412,7 +412,7 @@ export class ReactLoopAgent implements Agent {
       const toolCalls = message.content.filter(block => block.type === 'tool-call')
       if (toolCalls.length === 0) return { kind: 'completed' }
       const { concluded } = await executeToolCalls(
-        this.loopCtx, turn, step, toolCalls, signal,
+        this, this.loopCtx, turn, step, toolCalls, signal,
         context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
       )
       return concluded ? { kind: 'completed' } : null

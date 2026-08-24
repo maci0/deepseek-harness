@@ -52,8 +52,9 @@ export function goalToolExecution(ctx: Context, exec: ToolRunContext): GoalToolE
   if (agent === undefined) {
     return reject('goal tools require a calling agent', 'GOAL_TOOL_AGENT_REQUIRED')
   }
+  const initiator = ctx.agents.currentInitiator()
   if (ctx.agents.get(agent.id) !== agent || agent.status !== 'running'
-    || ctx.agents.currentInitiator() !== agent) {
+    || (initiator !== undefined && initiator !== agent)) {
     return reject(
       'goal tools require the exact live calling agent inside its active driver',
       'GOAL_TOOL_DRIVER_REQUIRED',

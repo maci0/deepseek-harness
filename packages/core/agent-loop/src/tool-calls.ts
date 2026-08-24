@@ -11,6 +11,7 @@
  * @module dsh-agent-loop/tool-calls
  */
 
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import { assertNever, createToolResultMessage, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
@@ -57,6 +58,7 @@ interface GroupOutcome {
  * @param acceptContext - accepts committed result context for the next step boundary.
  */
 export async function executeToolCalls(
+  agent: Agent,
   ctx: Context,
   turn: number,
   step: number,
@@ -64,7 +66,6 @@ export async function executeToolCalls(
   signal: AbortSignal,
   acceptContext: (context: UserMessage) => void,
 ): Promise<{ concluded: boolean }> {
-  const agent = ctx.agents.requireInitiator()
   const { session } = agent
 
   // Inputs are distinct because tools/execute wrappers may replace `exec.signal`.
@@ -88,7 +89,7 @@ export async function executeToolCalls(
     const mode = ctx.tools.executionMode(first.exec).kind
     const group = mode === 'parallel' ? planned.slice(next) : [first]
     const outcome = await runGroup(
-      ctx, turn, step, group, mode, signal, acceptContext,
+      agent, ctx, turn, step, group, mode, signal, acceptContext,
     )
     next += outcome.consumed
     concluded ||= outcome.concluded
@@ -119,6 +120,7 @@ function parseArguments(raw: string): unknown {
  * committing synthetic recovery results.
  */
 async function runGroup(
+  agent: Agent,
   ctx: Context,
   turn: number,
   step: number,
@@ -127,7 +129,7 @@ async function runGroup(
   signal: AbortSignal,
   acceptContext: (context: UserMessage) => void,
 ): Promise<GroupOutcome> {
-  const { session } = ctx.agents.requireInitiator()
+  const { session } = agent
   const { maxParallelToolCalls } = ctx.agentLoop.config
   const slots: (Slot | undefined)[] = group.map(() => undefined)
   // Started slots retain their `tool/call` seq so the result can cite it.

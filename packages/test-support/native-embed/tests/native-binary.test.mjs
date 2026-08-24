@@ -5,8 +5,8 @@
  * is the install anchor.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { gzipSync } from 'node:zlib'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { gzipSync, inflateRawSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -326,6 +326,50 @@ test('native dsh web API', async (t) => {
     assert.equal(body[0], 0x50, `not a zip: ${body.subarray(0, 20).toString('hex')}`)
     assert.equal(body[1], 0x4b)
   })
+  await t.test('idle native web does not busy-loop', async () => {
+    const pid = child.pid
+    assert.ok(typeof pid === 'number' && pid > 0, dump('idle cpu pid'))
+    const cpuTicks = () => {
+      const st = readFileSync(`/proc/${pid}/stat`, 'utf8')
+      const parts = st.slice(st.lastIndexOf(')') + 2).split(' ')
+      return Number(parts[11]) + Number(parts[12])
+    }
+    const before = cpuTicks()
+    await delay(1000)
+    const used = cpuTicks() - before
+    assert.ok(
+      used < 40,
+      `idle web burned ${used} ticks in 1s (~100 is a full core)\n${dump('idle cpu')}`,
+    )
+  })
+  await t.test('session.prompt keeps the jsonl header and export stays 200', async () => {
+    const created = await postApi(url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, dump).result.value.sessionId
+    const prompted = await postApi(url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'ping' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(800)
+    const logs = listSessionJsonl(bootHome)
+    assert.ok(logs.length > 0, `no session.jsonl under ${bootHome}\n${dump('session.prompt persist')}`)
+    const matching = logs.filter((path) => path.includes(sessionId))
+    assert.ok(matching.length > 0, `session ${sessionId} jsonl missing: ${logs.join('\n')}`)
+    const first = readFileSync(matching[0], 'utf8').split('\n', 1)[0]
+    assert.match(first, /"type":"session"/, `jsonl lost its header:\n${first}\n${dump('session.prompt persist')}`)
+    const exportUrl = new URL('/api/session.export', url)
+    exportUrl.searchParams.set('sessionId', sessionId)
+    exportUrl.searchParams.set('includeDescendants', 'true')
+    const head = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+    const headText = await head.text().catch(() => '')
+    assert.equal(
+      head.status,
+      200,
+      `HEAD session.export after prompt HTTP ${head.status}\n${headText}\n${dump('session.export after prompt')}`,
+    )
+  })
   await t.test('/api/session.prompt accepts IANA clientTimeZone', async () => {
     const created = await postApi(url, 'session.create')
     const sessionId = assertRpcOk('session.create', created, dump).result.value.sessionId
@@ -389,6 +433,20 @@ test('native dsh web API', async (t) => {
  * YAML default is compression zstd. Listing or prompting those sessions used
  * to throw encodingMismatch. Plant both suffixes, then list/create/export.
  */
+function listSessionJsonl(root) {
+  const files = []
+  const walk = (dir) => {
+    if (!existsSync(dir)) return
+    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, ent.name)
+      if (ent.isDirectory()) walk(path)
+      else if (ent.name === 'session.jsonl' || ent.name === 'session.jsonl.zstd') files.push(path)
+    }
+  }
+  walk(join(root, 'sessions'))
+  return files
+}
+
 function plantJsonlSession(root, { id, cwd, compression }) {
   const project = `--${cwd.replace(/^\/+/, '').replace(/\//g, '-')}--`
   const dir = join(root, 'sessions', project, id)
@@ -700,6 +758,1265 @@ test('native dsh settings.openDocument hands the file to xdg-open', async () => 
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('native dsh binary is a statically linked ELF with no island import-trap', () => {
+  assert.ok(existsSync(bin), `native binary missing: ${bin}`)
+  const bytes = readFileSync(bin)
+  assert.equal(bytes[0], 0x7f, 'not an ELF (magic byte 0)')
+  assert.equal(bytes[1], 0x45, 'not an ELF (magic byte 1)')
+  assert.equal(bytes[4], 2, 'not ELF64')
+  assert.equal(bytes[5], 1, 'not little-endian')
+  assert.equal(bytes.readUInt16LE(18), 0x3e, 'not x86-64 (e_machine)')
+  const phoff = Number(bytes.readBigUInt64LE(32))
+  const phentsize = bytes.readUInt16LE(54)
+  const phnum = bytes.readUInt16LE(56)
+  let dynamicHeaders = 0
+  for (let i = 0; i < phnum; i++) {
+    if (bytes.readUInt32LE(phoff + i * phentsize) === 2 /* PT_DYNAMIC */) dynamicHeaders++
+  }
+  assert.equal(dynamicHeaders, 0, 'binary has a PT_DYNAMIC header (dynamically linked)')
+  assert.equal(countOccurrences(bytes, 'scr:import-trap'), 0, 'binary contains scr:import-trap island strings')
+  assert.ok(
+    countOccurrences(bytes, '@deepseek-ai/dsh-home-paths') > 0,
+    'CLI static-import package dsh-home-paths missing from the native code',
+  )
+  assert.ok(countOccurrences(bytes, '0.1.1-rc.5+scriptc.33') > 0, 'native build version string missing from the binary')
+})
+
+test('native dsh --profile headless boots the plugin tree and reaches the LLM boundary', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-headless-boot-'))
+  try {
+    const r = spawnSync(bin, ['--profile', 'headless', 'say hi'], {
+      env: nativeEnv({ DSH_HOME: dir }),
+      encoding: 'utf8',
+      timeout: 60000,
+    })
+    const output = `${r.stdout}\n${r.stderr}`
+    assert.equal(r.signal, null, `headless killed by ${r.signal}\n${output}`)
+    assert.equal(r.status, 1, `headless expected to fail at the LLM boundary, got ${r.status}\n${output}`)
+    assert.match(r.stderr, /MISSING_CREDENTIAL/, output)
+    assert.doesNotMatch(output, /plugin tree failed to load/, output)
+    assert.doesNotMatch(output, /scr:import-trap/, output)
+    assert.doesNotMatch(output, /typert-loader/, output)
+    assert.doesNotMatch(output, /unexpected token/, output)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('native dsh --profile headless --dump-config is stable and lists the headless plugin set', () => {
+  const a = run(['--profile', 'headless', '--dump-config'])
+  const b = run(['--profile', 'headless', '--dump-config'])
+  assert.equal(a.status, 0, a.stderr)
+  assert.equal(a.stdout, b.stdout)
+  assert.match(a.stdout, /@deepseek-ai\/dsh-base/)
+  assert.match(a.stdout, /name: '@deepseek-ai\/dsh-llm'/)
+  assert.match(a.stdout, /name: '@deepseek-ai\/dsh-tool-bash'/)
+  assert.doesNotMatch(a.stdout, /plugin tree failed to load/)
+  assert.doesNotMatch(a.stderr, /typert-loader/)
+  assert.doesNotMatch(a.stderr, /unexpected token/)
+})
+
+test('native dsh web runs a session round-trip with the live extras active', async (t) => {
+  const liveExtras = [
+    '@deepseek-ai/dsh-schedule',
+    '@deepseek-ai/dsh-sdk-jsonrpc-server',
+    '@deepseek-ai/dsh-subagent-codex',
+    '@deepseek-ai/dsh-tmux-context',
+    '@deepseek-ai/dsh-tool-session-query',
+    '@deepseek-ai/dsh-web-fetch-http',
+    '@deepseek-ai/dsh-web-search-exa',
+    '@deepseek-ai/dsh-web-search-perplexity',
+  ]
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-live-rt-'))
+  const patch = writeInsertPatch(dir, liveExtras)
+  const session = await bootNativeWeb(nativeEnv({ DSH_HOME: dir }), ['--port', '0'], {
+    patchFiles: [patch],
+  })
+  t.after(async () => {
+    await session.stop()
+    rmSync(dir, { recursive: true, force: true })
+  })
+  const { url, state, dump } = session
+  assert.equal(session.child.exitCode, null, dump('listen'))
+  assert.doesNotMatch(state.stderr, /plugin tree failed to load/, dump('listen'))
+  assert.doesNotMatch(state.stderr, /scr:import-trap/, dump('listen'))
+  // The extras occupy the event loop briefly; the listener binds a tick after
+  // the URL is printed. Give it a beat before the first request.
+  await delay(300)
+  const created = await postApi(url, 'session.create')
+  const sessionId = assertRpcOk('session.create', created, dump).result.value.sessionId
+  const prompted = await postApi(url, 'session.prompt', {
+    sessionId,
+    mode: 'queue',
+    content: [{ type: 'text', text: 'ping' }],
+    clientTimeZone: 'UTC',
+  })
+  assert.equal(prompted.res.status, 200, prompted.text)
+  await delay(800)
+  const jsonl = listSessionJsonl(dir).filter((path) => path.includes(sessionId))
+  assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId} with live extras patched\n${dump('live round-trip')}`)
+  const header = readFileSync(jsonl[0], 'utf8').split('\n', 1)[0]
+  assert.match(header, /"type":"session"/, `jsonl lost its header:\n${header}\n${dump('live round-trip')}`)
+  const exportUrl = new URL('/api/session.export', url)
+  exportUrl.searchParams.set('sessionId', sessionId)
+  exportUrl.searchParams.set('includeDescendants', 'true')
+  const exp = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+  assert.equal(exp.status, 200, `session.export ${sessionId} HTTP ${exp.status}\n${dump('live round-trip')}`)
+})
+
+test('native dsh persists a created session across process restarts', async (t) => {
+  const bootHome = mkdtempSync(join(tmpdir(), 'dsh-native-restart-'))
+  let sessionId = ''
+  const first = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }))
+  try {
+    const created = await postApi(first.url, 'session.create')
+    sessionId = assertRpcOk('session.create', created, first.dump).result.value.sessionId
+    const prompted = await postApi(first.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'persist me' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(800)
+  } finally {
+    await first.stop()
+  }
+  const second = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }))
+  t.after(async () => {
+    await second.stop()
+    rmSync(bootHome, { recursive: true, force: true })
+  })
+  const listed = await postApi(second.url, 'session.list')
+  const ids = (assertRpcOk('session.list', listed, second.dump).result.value.items ?? []).map((item) => item.sessionId)
+  assert.ok(ids.includes(sessionId), `session ${sessionId} lost after restart\n${listed.text}\n${second.dump('restart list')}`)
+  const exportUrl = new URL('/api/session.export', second.url)
+  exportUrl.searchParams.set('sessionId', sessionId)
+  exportUrl.searchParams.set('includeDescendants', 'true')
+  const exp = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+  assert.equal(exp.status, 200, `session.export ${sessionId} HTTP ${exp.status} after restart\n${second.dump('restart export')}`)
+  const jsonl = listSessionJsonl(bootHome).filter((path) => path.includes(sessionId))
+  assert.ok(jsonl.length > 0, `session.jsonl for ${sessionId} gone after restart`)
+})
+
+/** The default web profile's `name:` rows, parsed from `--profile web --dump-config`. */
+function webProfilePluginNames() {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-web-profile-'))
+  try {
+    const r = spawnSync(bin, ['--profile', 'web', '--dump-config'], {
+      env: nativeEnv({ DSH_HOME: dir }),
+      encoding: 'utf8',
+      timeout: 45000,
+    })
+    assert.equal(r.status, 0, r.stderr)
+    return new Set([...r.stdout.matchAll(/name: '(@deepseek-ai\/[^']+)'/g)].map((m) => m[1]))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/** YAML indentation for a plain object (values JSON-encoded; nested objects recurse). */
+function yamlLines(value, indent) {
+  const out = []
+  for (const [key, val] of Object.entries(value)) {
+    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+      out.push(`${indent}${key}:`)
+      out.push(...yamlLines(val, `${indent}  `))
+    } else {
+      out.push(`${indent}${key}: ${JSON.stringify(val)}`)
+    }
+  }
+  return out
+}
+
+/**
+ * Boot the web profile with one non-default plugin inserted (plus its recipe:
+ * config, disabled conflicts, dependency plugins, entry overrides) and assert
+ * the plugin applies and activates. Every inventoried plugin that is not part
+ * of the default web profile gets a dedicated boot here, so the status report
+ * has per-plugin functional evidence instead of "resolve only".
+ */
+test('every inventoried plugin applies and activates on the web profile', { timeout: 1_200_000 }, async (t) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'dsh-native-per-plugin-'))
+  t.after(() => rmSync(scratch, { recursive: true, force: true }))
+
+  // Fixtures consumed by plugin configs.
+  const includeTarget = join(scratch, 'include-entries.yml')
+  writeFileSync(includeTarget, `- id: noop\n  name: '@deepseek-ai/cordis-plugin-logger-console'\n  disabled: true\n`)
+  const hooksConfig = join(scratch, 'hooks-config.json')
+  writeFileSync(hooksConfig, '{}\n')
+  const replayFixture = join(scratch, 'replay.jsonl')
+  writeFileSync(replayFixture, '{"kind":"chunks","chunks":[]}\n')
+  const dbPath = join(scratch, 'test.db')
+
+  const RECIPES = {
+    '@deepseek-ai/cordis-plugin-include': { config: { path: includeTarget } },
+    '@deepseek-ai/dsh-acp-demo': {
+      // Self-contained demo: owns JSONL persistence + query index, so it runs
+      // on the base bundle with those entries disabled rather than on web.
+      profile: { bundles: ['@deepseek-ai/dsh-base'], disable: ['session-persistence-jsonl', 'session-query-sqlite'] },
+      config: {
+        provider: 'stdio',
+        model: 'deepseek-chat',
+        workspaceContext: false,
+        dshHome: '/tmp',
+        tools: {},
+        sessionTitle: { fallbackMaxWords: 8, fallbackMaxBytes: 2000, maxTitleBytes: 2000 },
+        skills: {},
+        toolBash: {},
+        jobs: {},
+        invariants: {},
+        persistenceRoot: join(scratch, 'acpd-sessions'),
+      },
+    },
+    '@deepseek-ai/dsh-agent-spine-demo': {
+      config: {
+        workspaceContext: false,
+        dshHome: '/tmp',
+        tools: {},
+        sessionTitle: { fallbackMaxWords: 8, fallbackMaxBytes: 2000, maxTitleBytes: 2000 },
+        skills: {},
+        toolBash: {},
+        jobs: {},
+        invariants: {},
+      },
+    },
+    '@deepseek-ai/dsh-agent-tool-presentation': { config: { mode: 'native' } },
+    '@deepseek-ai/dsh-bash-local': { disable: ['bash-sandbox', 'permission'] },
+    '@deepseek-ai/dsh-e2b': { env: { E2B_API_KEY: 'test-key' } },
+    '@deepseek-ai/dsh-experimental-tool-agent-team': { deps: ['@deepseek-ai/dsh-experimental-agent-team'] },
+    '@deepseek-ai/dsh-fs-e2b': { disable: ['fs-sandbox'], deps: ['@deepseek-ai/dsh-e2b'], env: { E2B_API_KEY: 'test-key' } },
+    '@deepseek-ai/dsh-fs-local': { disable: ['fs-sandbox'] },
+    '@deepseek-ai/dsh-hooks-claude-code': { config: { configPath: hooksConfig } },
+    '@deepseek-ai/dsh-hooks-codex': { config: { configPath: hooksConfig } },
+    '@deepseek-ai/dsh-host-directory-picker-browse': {
+      disable: ['directory-picker'],
+      patch: { connection: { maxRequestBodyBytes: 300_000_000 } },
+    },
+    '@deepseek-ai/dsh-host-frontend-static': { config: { distIndex: '/index.html' } },
+    '@deepseek-ai/dsh-llm-replay': { env: { DSH_SNAPSHOT_FILE: replayFixture } },
+    '@deepseek-ai/dsh-lsp-stdio': { deps: ['@deepseek-ai/dsh-lsp'], config: { servers: { test: { command: '/bin/true', extensionToLanguage: { '.ts': 'typescript' } } } } },
+    '@deepseek-ai/dsh-mcp-client': { config: { transport: 'stdio', serverName: 'test', command: '/bin/true' } },
+    '@deepseek-ai/dsh-pwsh-local': { disable: ['pwsh-sandbox', 'bash-sandbox', 'permission'] },
+    '@deepseek-ai/dsh-session-title-all-prompts-llm': { disable: ['session-title-llm'], config: { targetWords: 10, targetCjkCharacters: 10, maxInputBytes: 4000, maxOutputTokens: 256, timeoutMs: 10000 } },
+    '@deepseek-ai/dsh-storage-sqlite': { config: { path: dbPath } },
+    '@deepseek-ai/dsh-subagent-acp': { config: { command: '/bin/true' } },
+    '@deepseek-ai/dsh-subagent-dsh-sdk': { config: { command: '/bin/true' } },
+    '@deepseek-ai/dsh-subprocess-e2b': { disable: ['subprocess'], deps: ['@deepseek-ai/dsh-e2b'], env: { E2B_API_KEY: 'test-key' } },
+    '@deepseek-ai/dsh-terminal-bash': { deps: ['@deepseek-ai/dsh-terminal'] },
+    '@deepseek-ai/dsh-tool-bash-persistent': { deps: ['@deepseek-ai/dsh-terminal'] },
+    '@deepseek-ai/dsh-tool-lsp': { deps: ['@deepseek-ai/dsh-lsp'] },
+    '@deepseek-ai/dsh-tool-pwsh-persistent': { deps: ['@deepseek-ai/dsh-terminal'] },
+    '@deepseek-ai/dsh-tool-terminal': { deps: ['@deepseek-ai/dsh-terminal'] },
+    '@deepseek-ai/dsh-time-context': { config: { timeZone: 'UTC' } },
+  }
+
+  const profilePlugins = webProfilePluginNames()
+  const candidates = listApplyPluginNames(repoRoot).filter((name) => !profilePlugins.has(name))
+  assert.ok(candidates.length >= 40, `expected most non-default plugins to be tested, got ${candidates.length}`)
+
+  const failures = []
+  for (const name of candidates) {
+    // agent-plane rows apply inside an agent scope, which agent presets
+    // compose: agent-tool-presentation rides the `code` preset,
+    // persona the `standard` preset. Mount them through a preset session
+    // instead of a global insert.
+    // dsh-headless is the headless profile's app bundle: it runs one task and
+    // exits. The headless-profile boot test already applies it and reaches the
+    // LLM boundary, so its web-profile insert would only double the coverage.
+    if (name === '@deepseek-ai/dsh-headless') continue
+    const agentPlanePreset = { '@deepseek-ai/dsh-agent-tool-presentation': 'code', '@deepseek-ai/dsh-persona': 'standard' }[name]
+    if (agentPlanePreset !== undefined) {
+      const bootHome = join(scratch, `boot-${name.replace(/[^a-z0-9]+/gi, '-')}`)
+      mkdirSync(bootHome, { recursive: true })
+      const session = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }), ['--port', '0'], {})
+      const problems = []
+      try {
+        if (session.child.exitCode !== null) {
+          problems.push(`process exited (code ${session.child.exitCode})`)
+        } else {
+          if (/plugin tree failed to load/.test(session.state.stderr)) problems.push('plugin tree failed to load')
+          const created = await postApi(session.url, 'session.create', { agentPreset: agentPlanePreset })
+          if (created.res.status === 200) {
+            const body = JSON.parse(created.text)
+            if (body.result?.ok !== true) problems.push(`${agentPlanePreset}-preset session.create failed: ${created.text.slice(0, 200)}`)
+          } else {
+            problems.push(`${agentPlanePreset}-preset session.create HTTP ${created.res.status}`)
+          }
+        }
+      } finally {
+        await session.stop()
+        rmSync(bootHome, { recursive: true, force: true })
+      }
+      if (problems.length > 0) failures.push(`${name}: ${problems.join('; ')}`)
+      continue
+    }
+    const recipe = RECIPES[name] ?? {}
+    const patch = join(scratch, `overlay-${name.replace(/[^a-z0-9]+/gi, '-')}.yml`)
+    // writeInsertPatch emits "- insert:" rows; replace it with the recipe-aware overlay.
+    const lines = []
+    for (const id of recipe.disable ?? []) lines.push(`- id: ${id}`, '  disabled: true')
+    for (const [id, overrides] of Object.entries(recipe.patch ?? {})) {
+      lines.push(`- id: ${id}`, '  config:', ...yamlLines(overrides, '    '))
+    }
+    lines.push('- insert:')
+    const insertId = `t-${name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}`
+    lines.push(`    - id: ${insertId}`, `      name: '${name}'`)
+    if (recipe.config !== undefined) lines.push('      config:', ...yamlLines(recipe.config, '        '))
+    for (const [i, dep] of (recipe.deps ?? []).entries()) {
+      lines.push(`    - id: dep-${i}`, `      name: '${dep}'`)
+    }
+    writeFileSync(patch, `${lines.join('\n')}\n`)
+
+    const bootHome = join(scratch, `boot-${insertId}`)
+    mkdirSync(bootHome, { recursive: true })
+    const env = nativeEnv({ DSH_HOME: bootHome, ...(recipe.env ?? {}) })
+    const profile = recipe.profile
+    let session
+    if (profile !== undefined) {
+      const profileDir = join(bootHome, 'profiles', 'custom')
+      mkdirSync(profileDir, { recursive: true })
+      writeFileSync(
+        join(profileDir, 'package.json'),
+        `${JSON.stringify({ name: 'custom-profile', version: '0.0.0', private: true, dsh: { profile: { bundles: profile.bundles } } }, null, 2)}\n`,
+      )
+      const profileLines = []
+      for (const id of profile.disable ?? []) profileLines.push(`- id: ${id}`, '  disabled: true')
+      profileLines.push(...lines.slice(lines.findIndex((l) => l === '- insert:')))
+      writeFileSync(join(profileDir, 'cordis.patch.yml'), `${profileLines.join('\n')}\n`)
+      // A custom bundle profile (e.g. a stdio ACP app) may serve no web UI;
+      // assert the process stays alive with a clean tree instead of a URL.
+      const child = spawn(bin, ['--profile', 'custom', '--no-open', '--port', '0'], {
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      const state = { stdout: '', stderr: '' }
+      child.stdout.setEncoding('utf8')
+      child.stderr.setEncoding('utf8')
+      child.stdout.on('data', (chunk) => { state.stdout += chunk })
+      child.stderr.on('data', (chunk) => { state.stderr += chunk })
+      await delay(4000)
+      session = {
+        child,
+        url: '',
+        state,
+        dump: (s = 'listen') => `${s}: exit=${child.exitCode}\nstdout:\n${state.stdout}\nstderr:\n${state.stderr}`,
+        stop: async () => {
+          child.stdout?.destroy()
+          child.stderr?.destroy()
+          if (child.exitCode !== null) return
+          child.kill('SIGKILL')
+          await Promise.race([new Promise((r) => child.once('exit', r)), delay(2000)])
+        },
+      }
+    } else {
+      session = await bootNativeWeb(env, ['--port', '0'], { patchFiles: [patch] })
+    }
+    const problems = []
+    try {
+      if (session.child.exitCode !== null) {
+        problems.push(`process exited (code ${session.child.exitCode})`)
+      } else {
+        if (/plugin tree failed to load/.test(session.state.stderr)) problems.push('plugin tree failed to load')
+        if (/scr:import-trap/.test(session.state.stderr)) problems.push('scr:import-trap')
+        const failed = session.state.stderr.match(/failed to (?:apply|import) loader entry [a-z0-9-]+ \(@deepseek-ai\/[^)]+\): ([^\n|]+)/g)
+        if (failed !== null) problems.push(`loader entry failures: ${failed.slice(0, 2).join(' | ')}`)
+        const baseUrl = typeof session.url === 'string' ? session.url : await session.url
+        if (baseUrl !== '') {
+          let got
+          try {
+            got = await postApi(baseUrl, 'pluginInventory/list', { args: {} })
+          } catch (error) {
+            problems.push(`pluginInventory fetch failed (${String(error.cause?.code ?? error)}); process may have died after listen`)
+          }
+          if (got !== undefined && got.res.status === 200) {
+            const body = JSON.parse(got.text)
+            const entries = body.result?.value?.entries
+            if (Array.isArray(entries)) {
+              const entry = entries.find((row) => row.moduleName === name)
+              if (entry === undefined) problems.push(`not in plugin inventory`)
+              else if (entry.fiberPhase === null) problems.push('fiberPhase null (did not activate)')
+            }
+          }
+        }
+      }
+    } finally {
+      await session.stop()
+      rmSync(bootHome, { recursive: true, force: true })
+    }
+    if (problems.length > 0) {
+      failures.push(`${name}: ${problems.join('; ')}\n${session.state.stderr.split('\n').slice(0, 4).join('\n')}`)
+    }
+  }
+  assert.deepEqual(failures, [], `plugins that failed to apply/activate:\n${failures.join('\n\n')}`)
+})
+
+/**
+ * llm-replay fixtures that make the native agent loop run a COMPLETE turn
+ * offline: a canned model script (text answer, or a bash tool-call followed
+ * by the final answer) stands in for the LLM, so the loop, tool execution,
+ * and session persistence all run end-to-end without network or keys.
+ */
+function writeReplayFixtures(dir) {
+  const primary = join(dir, 'replay-session.jsonl')
+  writeFileSync(primary, `${JSON.stringify({ type: 'session', version: 0, id: 'replay', createdAt: Date.now(), cwd: '/tmp', delegationDepth: 0 })}\n`)
+  const textScript = join(dir, 'replay-text.json')
+  writeFileSync(textScript, `${JSON.stringify([{ kind: 'chunks', chunks: [
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'text-delta', index: 0, text: 'Hello from native dsh!' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'Hello from native dsh!' } },
+    { type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ] }])}\n`)
+  const toolScript = join(dir, 'replay-tool.json')
+  writeFileSync(toolScript, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_1', name: 'bash', argumentsDelta: '{"command":"echo hello-from-native","description":"test"}' },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_1', name: 'bash', arguments: { command: 'echo hello-from-native', description: 'test' } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'The command ran and printed hello-from-native' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'The command ran and printed hello-from-native' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}\n`)
+  const replayPatch = join(dir, 'llm-replay.yml')
+  // The session-title plugin shares the session's LLM route and consumes a
+  // replay entry per title generation; disabling it keeps fixture entries in
+  // 1:1 correspondence with the turn's model calls.
+  writeFileSync(replayPatch, `- id: session-title-llm\n  disabled: true\n- insert:\n    - id: llm-replay\n      name: '@deepseek-ai/dsh-llm-replay'\n`)
+  return { primary, textScript, toolScript, replayPatch }
+}
+
+function replayEnv(dir, script, extra = {}) {
+  return nativeEnv({
+    DSH_SNAPSHOT_FILE: join(dir, 'replay-session.jsonl'),
+    DSH_SNAPSHOT_OVERRIDE: script,
+    ...extra,
+  })
+}
+
+test('native dsh headless completes a task end-to-end via llm-replay (no network)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-'))
+  try {
+    const { primary, textScript, replayPatch } = writeReplayFixtures(dir)
+    const r = spawnSync(bin, ['--profile', 'headless', '--patch', replayPatch, 'say hi'], {
+      env: replayEnv(dir, textScript, { DSH_HOME: dir }),
+      encoding: 'utf8',
+      timeout: 90000,
+    })
+    assert.equal(r.signal, null, `${r.signal}\n${r.stdout}\n${r.stderr}`)
+    assert.equal(r.status, 0, `headless replay run failed (${r.status})\nstdout:\n${r.stdout}\nstderr:\n${r.stderr}`)
+    assert.match(r.stdout, /Hello from native dsh!/, `final answer missing from headless stdout:\n${r.stdout}`)
+    assert.doesNotMatch(r.stderr, /plugin tree failed to load/, r.stderr)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('native dsh web completes a session turn via llm-replay (assistant message persisted)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-web-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { textScript, replayPatch } = writeReplayFixtures(dir)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, textScript, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'say hi' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(2500)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('replay turn')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"type":"assistant\/message"/, `assistant message missing — the turn never completed\n${session.dump('replay turn')}`)
+    assert.match(text, /"type":"turn\/end"/, `turn did not end\n${session.dump('replay turn')}`)
+    assert.match(text, /Hello from native dsh!/, `replayed answer not persisted\n${session.dump('replay turn')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web executes a bash tool call end-to-end via llm-replay', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-tool-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { toolScript, replayPatch } = writeReplayFixtures(dir)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, toolScript, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'run a command' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(3500)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('tool turn')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"type":"tool\/call"/, `tool call not recorded\n${session.dump('tool turn')}`)
+    assert.match(text, /"type":"tool\/result"/, `tool result not recorded — bash never ran\n${session.dump('tool turn')}`)
+    assert.match(text, /hello-from-native\\n/, `bash command output missing from the tool result\n${session.dump('tool turn')}`)
+    assert.match(text, /"type":"turn\/end"/, `turn did not end\n${session.dump('tool turn')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web executes a write tool call via llm-replay (file lands on disk)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-write-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const fileName = `native-wr-${process.pid}-${Date.now()}.txt`
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-write.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_1', name: 'write', argumentsDelta: JSON.stringify({ file_path: fileName, content: 'written by native dsh' }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_1', name: 'write', arguments: { file_path: fileName, content: 'written by native dsh' } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'File written.' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'File written.' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}\n`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'write a file' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(3500)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('write turn')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"type":"tool\/result"/, `tool result not recorded\n${session.dump('write turn')}`)
+    // The sandboxed fs backend resolved the workspace (the process cwd) and
+    // really wrote the file: assert both the recorded result and on-disk bytes.
+    const landed = join(process.cwd(), fileName)
+    assert.equal(existsSync(landed), true, `write tool did not create ${landed}\n${session.dump('write turn')}`)
+    assert.equal(readFileSync(landed, 'utf8'), 'written by native dsh', `unexpected file content at ${landed}`)
+  } finally {
+    await session.stop()
+    rmSync(join(process.cwd(), fileName), { force: true })
+  }
+})
+
+test('native dsh web chains write then read tools via llm-replay', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-writeread-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const fileName = `native-wr-${process.pid}-${Date.now()}.txt`
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-writeread.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_1', name: 'write', argumentsDelta: JSON.stringify({ file_path: fileName, content: 'hello from the write tool' }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_1', name: 'write', arguments: { file_path: fileName, content: 'hello from the write tool' } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_2', name: 'read', argumentsDelta: JSON.stringify({ file_path: fileName }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_2', name: 'read', arguments: { file_path: fileName } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'The file contained: hello from the write tool' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'The file contained: hello from the write tool' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}\n`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'write then read a file' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(4500)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('write-read turn')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    const results = [...text.matchAll(/"type":"tool\/result"/g)]
+    assert.ok(results.length >= 2, `expected write + read results, got ${results.length}\n${session.dump('write-read turn')}`)
+    assert.match(text, /hello from the write tool/, `read tool did not return the written content\n${session.dump('write-read turn')}`)
+    assert.match(text, /"type":"turn\/end"/, `turn did not end\n${session.dump('write-read turn')}`)
+  } finally {
+    await session.stop()
+    rmSync(join(process.cwd(), fileName), { force: true })
+  }
+})
+
+test('native dsh web keeps session context across multiple turns via llm-replay', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-multiturn-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-multiturn.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'First answer.' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'First answer.' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'Second answer.' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'Second answer.' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}\n`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    for (const prompt of ['first turn', 'second turn']) {
+      const prompted = await postApi(session.url, 'session.prompt', {
+        sessionId,
+        mode: 'queue',
+        content: [{ type: 'text', text: prompt }],
+        clientTimeZone: 'UTC',
+      })
+      assert.equal(prompted.res.status, 200, prompted.text)
+      await delay(2500)
+    }
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('multi-turn')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    const turns = [...text.matchAll(/"type":"turn\/end"/g)]
+    assert.ok(turns.length >= 2, `expected 2 completed turns, got ${turns.length}\n${session.dump('multi-turn')}`)
+    assert.match(text, /First answer\./, `first turn's answer missing\n${session.dump('multi-turn')}`)
+    assert.match(text, /Second answer\./, `second turn's answer missing — session context lost\n${session.dump('multi-turn')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web delegates a subagent via llm-replay (child session + model call)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-subagent-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { primary, replayPatch } = writeReplayFixtures(dir)
+  // The child agent's own model call is replayed from a child session fixture.
+  const childLog = join(dir, 'child-session.jsonl')
+  const childChunks = [
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'text-delta', index: 0, text: 'child says hi' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'child says hi' } },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ]
+  writeFileSync(childLog, [
+    JSON.stringify({ type: 'session', version: 0, id: 'child-1', createdAt: Date.now(), cwd: '/tmp', delegationDepth: 1, seedLength: 0 }),
+    ...childChunks.map((chunk, i) => JSON.stringify({ type: 'assistant/chunk', seq: i + 1, time: Date.now() + i, data: { turn: 1, step: 1, chunk } })),
+    '',
+  ].join('\n'))
+  const parentScript = join(dir, 'replay-subagent.json')
+  writeFileSync(parentScript, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_sub', name: 'subagent', argumentsDelta: JSON.stringify({ description: 'test task', prompt: 'say hi' }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_sub', name: 'subagent', arguments: { description: 'test task', prompt: 'say hi' } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'The subagent replied: child says hi' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'The subagent replied: child says hi' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}\n`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const env = replayEnv(dir, parentScript, { DSH_HOME: bootHome, DSH_SNAPSHOT_CHILD_FILES: childLog })
+  const session = await bootNativeWeb(env, ['--port', '0'], { patchFiles: [replayPatch] })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'delegate a task' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(6000)
+    const parentLog = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(parentLog.length > 0, `no parent session.jsonl\n${session.dump('subagent')}`)
+    const parentText = readFileSync(parentLog[0], 'utf8')
+    assert.match(parentText, /"type":"tool\/call"/, `subagent tool call not recorded\n${session.dump('subagent')}`)
+    assert.match(parentText, /"type":"tool\/result"/, `subagent result not recorded\n${session.dump('subagent')}`)
+    assert.match(parentText, /The subagent replied: child says hi/, `parent final answer missing\n${session.dump('subagent')}`)
+    assert.match(parentText, /"turn\/end"/, `parent turn did not end\n${session.dump('subagent')}`)
+    // The child ran as its own session with its own replayed model call.
+    const childLogs = listSessionJsonl(bootHome).filter((p) => !p.includes(sessionId))
+    assert.ok(childLogs.length > 0, `no child session.jsonl created\n${session.dump('subagent')}`)
+    const childText = readFileSync(childLogs[0], 'utf8')
+    assert.match(childText, /say hi/, `child prompt missing\n${childText}`)
+    assert.match(childText, /child says hi/, `child model answer missing\n${childText}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web executes the todo_write tool via llm-replay', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-todo-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-todo.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_todo', name: 'todo_write', argumentsDelta: JSON.stringify({ todos: [{ content: 'native todo task', status: 'pending' }] }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_todo', name: 'todo_write', arguments: { todos: [{ content: 'native todo task', status: 'pending' }] } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'Todos updated.' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'Todos updated.' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}
+`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'track a task' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(3500)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}
+${session.dump('todo')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"type":"tool\/result"/, `todo result not recorded
+${session.dump('todo')}`)
+    assert.match(text, /1 pending, 0 in progress, 0 completed/, `todo store did not update
+${session.dump('todo')}`)
+    assert.match(text, /"type":"turn\/end"/, `turn did not end
+${session.dump('todo')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web creates a goal via llm-replay', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-goal-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-goal.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_g', name: 'create_goal', argumentsDelta: JSON.stringify({ objective: 'write a native goal' }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_g', name: 'create_goal', arguments: { objective: 'write a native goal' } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'Goal created.' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'Goal created.' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}
+`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'create a goal' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(3500)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}
+${session.dump('goal')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"type":"tool\/result"/, `goal result not recorded
+${session.dump('goal')}`)
+    assert.match(text, /"objective":"write a native goal"/, `created goal objective missing from the result
+${session.dump('goal')}`)
+    assert.match(text, /"type":"turn\/end"/, `turn did not end
+${session.dump('goal')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web registers an ask_user_question interaction and pauses the turn', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-ask-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-ask.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'call_a', name: 'ask_user_question', argumentsDelta: JSON.stringify({ questions: [{ id: 'q1', question: 'Which color?' }] }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_a', name: 'ask_user_question', arguments: { questions: [{ id: 'q1', question: 'Which color?' }] } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+  ])}
+`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'ask the user' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(3000)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}
+${session.dump('ask')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"type":"tool\/call"/, `ask_user_question call not recorded
+${session.dump('ask')}`)
+    assert.match(text, /ask_user_question/, `ask tool name missing
+${session.dump('ask')}`)
+    assert.match(text, /Which color\?/, `question text missing
+${session.dump('ask')}`)
+    // Unanswered questions leave the turn pending: no result, no turn/end yet.
+    assert.doesNotMatch(text, /"type":"tool\/result"/, `ask should not have a result while unanswered
+${session.dump('ask')}`)
+    assert.doesNotMatch(text, /"type":"turn\/end"/, `ask turn should stay pending
+${session.dump('ask')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+/** Minimal ZIP reader: locate the central directory, inflate the named entry. */
+function zipEntryText(zipBytes, entryName) {
+  const buf = Buffer.from(zipBytes)
+  // End of central directory: scan backwards for the 0x06054b50 signature.
+  let eocd = -1
+  for (let i = buf.length - 22; i >= 0; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break }
+  }
+  assert.ok(eocd !== -1, 'no EOCD in zip')
+  const count = buf.readUInt16LE(eocd + 10)
+  const cdOffset = buf.readUInt32LE(eocd + 16)
+  for (let i = 0; i < count; i++) {
+    const off = cdOffset + i * 46
+    assert.equal(buf.readUInt32LE(off), 0x02014b50, 'bad central directory signature')
+    const method = buf.readUInt16LE(off + 10)
+    const compressedSize = buf.readUInt32LE(off + 20)
+    const uncompressedSize = buf.readUInt32LE(off + 24)
+    const nameLen = buf.readUInt16LE(off + 28)
+    const extraLen = buf.readUInt16LE(off + 30)
+    const commentLen = buf.readUInt16LE(off + 32)
+    const localOffset = buf.readUInt32LE(off + 42)
+    const name = buf.subarray(off + 46, off + 46 + nameLen).toString('utf8')
+    if (name !== entryName) continue
+    // Local file header: 30-byte fixed part + name/extra.
+    assert.equal(buf.readUInt32LE(localOffset), 0x04034b50, 'bad local header signature')
+    const lNameLen = buf.readUInt16LE(localOffset + 26)
+    const lExtraLen = buf.readUInt16LE(localOffset + 28)
+    const dataStart = localOffset + 30 + lNameLen + lExtraLen
+    const data = buf.subarray(dataStart, dataStart + compressedSize)
+    const raw = method === 0 ? data : inflateRawSync(data)
+    assert.equal(raw.length, uncompressedSize, `zip entry ${entryName} size mismatch`)
+    return raw.toString('utf8')
+  }
+  assert.fail(`zip entry not found: ${entryName}`)
+}
+
+test('native dsh session.export returns a zip containing the session jsonl', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-export-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }), ['--port', '0'], {})
+  try {
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const exportUrl = new URL('/api/session.export', session.url)
+    exportUrl.searchParams.set('sessionId', sessionId)
+    exportUrl.searchParams.set('includeDescendants', 'true')
+    const res = await fetch(exportUrl, { signal: AbortSignal.timeout(10000) })
+    assert.equal(res.status, 200, `session.export HTTP ${res.status}
+${session.dump('export')}`)
+    const body = new Uint8Array(await res.arrayBuffer())
+    assert.equal(body[0], 0x50, `not a zip: ${Buffer.from(body).subarray(0, 20).toString('hex')}`)
+    assert.equal(body[1], 0x4b)
+    const jsonl = zipEntryText(body, 'session.jsonl')
+    assert.match(jsonl, /"type":"session"/, `exported jsonl lost its header:
+${jsonl.slice(0, 200)}`)
+    assert.match(jsonl, new RegExp(sessionId.replace(/[-]/g, '\\-')), `exported jsonl missing session ${sessionId}
+${jsonl.slice(0, 300)}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh headless completes a task with a bash tool call via llm-replay', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-headless-tool-'))
+  try {
+    const { primary, replayPatch } = writeReplayFixtures(dir)
+    const toolScript = join(dir, 'replay-headless-tool.json')
+    writeFileSync(toolScript, `${JSON.stringify([
+      { kind: 'chunks', chunks: [
+        { type: 'block-start', index: 0, blockType: 'tool-call' },
+        { type: 'tool-call-delta', index: 0, id: 'call_1', name: 'bash', argumentsDelta: '{"command":"echo hello-from-native","description":"test"}' },
+        { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'call_1', name: 'bash', arguments: { command: 'echo hello-from-native', description: 'test' } } },
+        { type: 'finish', reason: { kind: 'tool-calls' } },
+      ] },
+      { kind: 'chunks', chunks: [
+        { type: 'block-start', index: 0, blockType: 'text' },
+        { type: 'text-delta', index: 0, text: 'The command ran and printed hello-from-native' },
+        { type: 'block-end', index: 0, block: { type: 'text', text: 'The command ran and printed hello-from-native' } },
+        { type: 'finish', reason: { kind: 'stop' } },
+      ] },
+    ])}
+`)
+    const r = spawnSync(bin, ['--profile', 'headless', '--patch', replayPatch, 'run a command'], {
+      env: replayEnv(dir, toolScript, { DSH_HOME: dir }),
+      encoding: 'utf8',
+      timeout: 120000,
+    })
+    assert.equal(r.signal, null, `${r.signal}
+${r.stdout}
+${r.stderr}`)
+    assert.equal(r.status, 0, `headless tool run failed (${r.status})
+stdout:
+${r.stdout}
+stderr:
+${r.stderr}`)
+    assert.match(r.stdout, /The command ran and printed hello-from-native/, `final answer missing:
+${r.stdout}`)
+    assert.doesNotMatch(r.stderr, /plugin tree failed to load/, r.stderr)
+    // The bash tool really ran: its output landed in the headless session log.
+    const log = listSessionJsonl(dir)[0]
+    assert.ok(log !== undefined, `no headless session.jsonl under ${dir}`)
+    const text = readFileSync(log, 'utf8')
+    assert.match(text, /hello-from-native\\n/, `bash output missing from headless session
+${text.slice(0, 400)}`)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('native dsh web runs two sessions concurrently via llm-replay', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-concurrent-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { primary, replayPatch } = writeReplayFixtures(dir)
+  const scriptA = join(dir, 'replay-a.json')
+  writeFileSync(scriptA, `${JSON.stringify([{ kind: 'chunks', chunks: [
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'text-delta', index: 0, text: 'answer from session A' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'answer from session A' } },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ] }])}
+`)
+  // Child fixtures are session logs (the replay derives their script from
+  // assistant/chunk events), unlike the primary's override array.
+  const scriptB = join(dir, 'replay-b.jsonl')
+  const bChunks = [
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'text-delta', index: 0, text: 'answer from session B' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'answer from session B' } },
+    { type: 'finish', reason: { kind: 'stop' } },
+  ]
+  writeFileSync(scriptB, [
+    JSON.stringify({ type: 'session', version: 0, id: 'session-b', createdAt: Date.now(), cwd: '/tmp', delegationDepth: 0, seedLength: 0 }),
+    ...bChunks.map((chunk, i) => JSON.stringify({ type: 'assistant/chunk', seq: i + 1, time: Date.now() + i, data: { turn: 1, step: 1, chunk } })),
+    '',
+  ].join('\n'))
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, scriptA, { DSH_HOME: bootHome, DSH_SNAPSHOT_CHILD_FILES: scriptB }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const createA = await postApi(session.url, 'session.create')
+    const idA = assertRpcOk('session.create', createA, session.dump).result.value.sessionId
+    const createB = await postApi(session.url, 'session.create')
+    const idB = assertRpcOk('session.create', createB, session.dump).result.value.sessionId
+    // Prompt both sessions in parallel; the worker engines must interleave.
+    const [ra, rb] = await Promise.all([
+      postApi(session.url, 'session.prompt', { sessionId: idA, mode: 'queue', content: [{ type: 'text', text: 'prompt A' }], clientTimeZone: 'UTC' }),
+      postApi(session.url, 'session.prompt', { sessionId: idB, mode: 'queue', content: [{ type: 'text', text: 'prompt B' }], clientTimeZone: 'UTC' }),
+    ])
+    assert.equal(ra.res.status, 200, ra.text)
+    assert.equal(rb.res.status, 200, rb.text)
+    await delay(4000)
+    const logA = listSessionJsonl(bootHome).filter((p) => p.includes(idA))[0]
+    const logB = listSessionJsonl(bootHome).filter((p) => p.includes(idB))[0]
+    assert.ok(logA !== undefined, `session A jsonl missing
+${session.dump('concurrent')}`)
+    assert.ok(logB !== undefined, `session B jsonl missing
+${session.dump('concurrent')}`)
+    const textA = readFileSync(logA, 'utf8')
+    const textB = readFileSync(logB, 'utf8')
+    assert.match(textA, /answer from session A/, `session A answer missing
+${textA.slice(0, 400)}`)
+    assert.match(textA, /"type":"turn\/end"/, `session A turn did not end
+${textA.slice(0, 400)}`)
+    assert.match(textB, /answer from session B/, `session B answer missing
+${textB.slice(0, 400)}`)
+    assert.match(textB, /"type":"turn\/end"/, `session B turn did not end
+${textB.slice(0, 400)}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web edits a file via llm-replay (read→edit→read)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-edit-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const fileName = `native-edt-${process.pid}-${Date.now()}.txt`
+  writeFileSync(join(process.cwd(), fileName), 'hello world\n')
+  t.after(() => rmSync(join(process.cwd(), fileName), { force: true }))
+  const { replayPatch } = writeReplayFixtures(dir)
+  const args = (id, name, payload) => ({ id, name, payload })
+  const script = join(dir, 'replay-edit.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, ...args('r1', 'read', { file_path: fileName }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'r1', name: 'read', arguments: { file_path: fileName } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, ...args('e1', 'edit', { file_path: fileName, old_string: 'world', new_string: 'native' }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'e1', name: 'edit', arguments: { file_path: fileName, old_string: 'world', new_string: 'native' } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, ...args('r2', 'read', { file_path: fileName }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'r2', name: 'read', arguments: { file_path: fileName } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'The file now contains hello native' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'The file now contains hello native' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}
+`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'edit the file' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(5000)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl
+${session.dump('edit')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    const results = [...text.matchAll(/"type":"tool\/result"/g)]
+    assert.ok(results.length >= 3, `expected read/edit/read results, got ${results.length}
+${session.dump('edit')}`)
+    assert.doesNotMatch(text, /isError":true/, `a tool errored in the edit chain
+${session.dump('edit')}`)
+    // The file on disk really changed and stayed readable (mode preserved).
+    assert.equal(readFileSync(join(process.cwd(), fileName), 'utf8'), 'hello native\n', `file not edited on disk`)
+    assert.match(text, /"type":"turn\/end"/, `turn did not end
+${session.dump('edit')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web contains a model error via llm-replay (process survives)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-error-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-throw.json')
+  writeFileSync(script, `${JSON.stringify([{ kind: 'throw', chunks: [], message: 'simulated model failure', code: 'E_SIMULATED' }])}\n`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    assert.equal(session.child.exitCode, null, session.dump('listen'))
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'say hi' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(3000)
+    // The failed model call must not kill the process; the turn ends with the
+    // recorded error and the session stays usable.
+    assert.equal(session.child.exitCode, null, `process died on a model error\n${session.dump('error')}`)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl\n${session.dump('error')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"kind":"error"/, `turn did not end in error\n${text.slice(0, 400)}`)
+    assert.match(text, /simulated model failure/, `error message not recorded\n${text.slice(0, 400)}`)
+    assert.match(text, /E_SIMULATED/, `error code not recorded\n${text.slice(0, 400)}`)
+    // The session still answers a follow-up request.
+    const again = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'are you alive?' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(again.res.status, 200, again.text)
+  } finally {
+    await session.stop()
+  }
+})
+
+test('native dsh web searches file contents via the grep tool (llm-replay)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-native-replay-grep-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const fileName = `native-grep-${process.pid}-${Date.now()}.txt`
+  writeFileSync(join(process.cwd(), fileName), 'alpha line\nneedle-to-find here\nomega line\n')
+  t.after(() => rmSync(join(process.cwd(), fileName), { force: true }))
+  const { replayPatch } = writeReplayFixtures(dir)
+  const script = join(dir, 'replay-grep.json')
+  writeFileSync(script, `${JSON.stringify([
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'tool-call' },
+      { type: 'tool-call-delta', index: 0, id: 'g1', name: 'grep', argumentsDelta: JSON.stringify({ pattern: 'needle-to-find', path: fileName }) },
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'g1', name: 'grep', arguments: { pattern: 'needle-to-find', path: fileName } } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    ] },
+    { kind: 'chunks', chunks: [
+      { type: 'block-start', index: 0, blockType: 'text' },
+      { type: 'text-delta', index: 0, text: 'Found the needle.' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'Found the needle.' } },
+      { type: 'finish', reason: { kind: 'stop' } },
+    ] },
+  ])}
+`)
+  const bootHome = join(dir, 'home')
+  mkdirSync(bootHome, { recursive: true })
+  const session = await bootNativeWeb(replayEnv(dir, script, { DSH_HOME: bootHome }), ['--port', '0'], {
+    patchFiles: [replayPatch],
+  })
+  try {
+    const created = await postApi(session.url, 'session.create')
+    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const prompted = await postApi(session.url, 'session.prompt', {
+      sessionId,
+      mode: 'queue',
+      content: [{ type: 'text', text: 'find the needle' }],
+      clientTimeZone: 'UTC',
+    })
+    assert.equal(prompted.res.status, 200, prompted.text)
+    await delay(4000)
+    const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
+    assert.ok(jsonl.length > 0, `no session.jsonl\n${session.dump('grep')}`)
+    const text = readFileSync(jsonl[0], 'utf8')
+    assert.match(text, /"type":"tool\/result"/, `grep result not recorded\n${session.dump('grep')}`)
+    assert.doesNotMatch(text, /isError":true/, `grep errored\n${session.dump('grep')}`)
+    assert.match(text, /needle-to-find here/, `grep result missing the matched line\n${session.dump('grep')}`)
+    assert.match(text, /"type":"turn\/end"/, `turn did not end\n${session.dump('grep')}`)
+  } finally {
+    await session.stop()
+  }
+})
+
+function countOccurrences(bytes, needle) {
+  const buf = Buffer.from(needle, 'utf8')
+  let count = 0
+  let from = 0
+  while (true) {
+    const at = bytes.indexOf(buf, from)
+    if (at === -1) break
+    count++
+    from = at + buf.length
+  }
+  return count
+}
 
 function probe(family) {
   assert.ok(existsSync(bin), `native binary missing: ${bin}`)
