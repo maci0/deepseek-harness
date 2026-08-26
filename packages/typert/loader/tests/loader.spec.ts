@@ -8,7 +8,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import * as typertLoader from '@deepseek-ai/dsh-typert-loader'
-import { validateTypertManifest } from '@deepseek-ai/dsh-typert-loader'
+import { typertModuleSpecifier, validateTypertManifest } from '@deepseek-ai/dsh-typert-loader'
 import { z } from 'zod'
 
 let root: string | undefined
@@ -403,6 +403,23 @@ describe('typert loader', () => {
       expect(logged).toHaveBeenCalledWith(expect.objectContaining({ message: 'register failed' }))
     }, { timeout: 10_000 })
     expect(ctx.typert.getPackage('@fixture/steady-failure')).toBeUndefined()
+  })
+})
+
+describe('typertModuleSpecifier', () => {
+  it('names the package subpath on scriptc and the file URL on Node', () => {
+    const artifactPath = '/tmp/pkg/typert.host.js'
+    const argv0 = process.argv[0] ?? process.execPath
+    try {
+      process.argv[0] = 'scriptc'
+      expect(typertModuleSpecifier('@deepseek-ai/dsh-commands', artifactPath))
+        .toBe('@deepseek-ai/dsh-commands/typert')
+      process.argv[0] = 'node'
+      expect(typertModuleSpecifier('@deepseek-ai/dsh-commands', artifactPath))
+        .toBe(pathToFileURL(artifactPath).href)
+    } finally {
+      process.argv[0] = argv0
+    }
   })
 })
 

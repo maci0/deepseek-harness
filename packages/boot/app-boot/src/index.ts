@@ -8,8 +8,9 @@
 
 import { pathToFileURL } from 'node:url'
 import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { parseEnv } from 'node:util'
-import { basename, dirname, isAbsolute, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { Context, type FiberState } from '@deepseek-ai/cordis'
 import Loader, { type Entry, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
@@ -767,7 +768,15 @@ export async function boot(
   let stage = 'host preparation failed'
   try {
     ctx.baseUrl = pathToFileURL(dirname(absoluteConfigPath)).href + '/'
-    ctx.provide('dshHomePath', dshHomePath)
+    ctx.provide('dshHomePath', (...segments: string[]) => {
+      if (!(process.env.DSH_HOME ?? '').trim()) {
+        const a0 = process.argv[0]
+        if (a0 === 'scriptc' || (typeof a0 === 'string' && (a0 === 'dsh' || a0.endsWith('/dsh')))) {
+          process.env.DSH_HOME = join(homedir(), '.dsh-native')
+        }
+      }
+      return dshHomePath(...segments)
+    })
     await ctx.plugin(Loader)
     await prepare?.(ctx)
     stage = 'plugin tree failed to load'
@@ -781,7 +790,13 @@ export async function boot(
     // re-check after every await.
     await ctx.get('loader')?.await()
     if (ctx.get('loader') === undefined) return ctx
-    await assertEntriesActivated(ctx, binName)
+    if (ctx.get('cmdlineTerminal') === true) return ctx
+    try {
+      await assertEntriesActivated(ctx, binName)
+    } catch (error) {
+      const msg = error instanceof Error ? error.stack ?? error.message : `non-Error: ${String(error)}`
+      throw new Error(`${binName}: activation audit failed: ${msg}`, { cause: error })
+    }
     return ctx
   } catch (cause) {
     // Root-fiber disposal contains cleanup failures per observer (Cordis
