@@ -6,7 +6,7 @@
  * @module @deepseek-ai/dsh-native-command
  */
 
-import { execFile } from 'node:child_process'
+import { execFile, spawnSync } from 'node:child_process'
 
 /** Testable command boundary; native implementations never invoke a shell. */
 export type NativeCommandRunner = (
@@ -24,6 +24,34 @@ export type NativeCommandRunner = (
  */
 export const runNativeCommand: NativeCommandRunner = (command, args, signal) =>
   new Promise((resolve, reject) => {
+    if (process.argv[0] === 'scriptc') {
+      // Island execFile is a throwing stub; spawnSync is posix_spawnp.
+      if (signal.aborted) {
+        reject(Object.assign(new Error('The operation was aborted'), { code: 'ABORT_ERR' }))
+        return
+      }
+      const result = spawnSync(command, [...args], { encoding: 'utf8', windowsHide: true })
+      const stdout = String(result.stdout ?? '')
+      const stderr = String(result.stderr ?? '')
+      if (result.error !== undefined) {
+        reject(Object.assign(new Error(result.error.message, { cause: result.error }), {
+          code: (result.error as NodeJS.ErrnoException).code,
+          stdout,
+          stderr,
+        }))
+        return
+      }
+      if (result.status !== 0) {
+        reject(Object.assign(new Error(`Command failed: ${command}`), {
+          code: result.status ?? 1,
+          stdout,
+          stderr,
+        }))
+        return
+      }
+      resolve({ stdout, stderr })
+      return
+    }
     execFile(
       command,
       [...args],

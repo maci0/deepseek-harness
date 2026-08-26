@@ -47,6 +47,7 @@ import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
   flushLiveSessionLog,
   sessionLogExportDeps,
+  bufferSessionLogZip,
   sessionLogZipFilename,
   streamSessionLogZip,
   type SessionLogExportReady,
@@ -202,11 +203,15 @@ function canonicalClientTimeZone(value: string): string | undefined {
     const canonical = new Intl.DateTimeFormat('en-US', { timeZone: value })
       .resolvedOptions().timeZone
     /* v8 ignore next -- Intl returns UTC or a canonical IANA Area/Location for accepted input. */
-    if (canonical !== 'UTC' && !IANA_TIME_ZONE.test(canonical)) return undefined
+    if (typeof canonical !== 'string'
+      || (canonical !== 'UTC' && !IANA_TIME_ZONE.test(canonical))) {
+      // scriptc's island Intl has no IANA database (SC2020 on timeZone).
+      return process.argv[0] === 'scriptc' ? value : undefined
+    }
     return canonical
   } catch {
-    // Intl rejects unsupported zone names; the RPC maps that parser rejection below.
-    return undefined
+    // Intl rejects unsupported zone names; the island has none to consult.
+    return process.argv[0] === 'scriptc' ? value : undefined
   }
 }
 
@@ -3563,14 +3568,41 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           await flushLiveSessionLog(deps, request.sessionId, signal)
           root = await deps.sessionPersistence.readRaw(request.sessionId, signal)
           signal.throwIfAborted()
-        } catch {
+        } catch (error: unknown) {
           signal.throwIfAborted()
-          // Root preparation failure: answer 500 without echoing the error,
-          // which may carry absolute host paths into the browser error bar.
+          // Root preparation failure: answer 500 without echoing host paths
+          // into the browser error bar. Native stderr keeps the cause.
+          if (process.argv[0] === 'scriptc') {
+            const detail = error instanceof Error ? error.stack ?? error.message : String(error)
+            process.stderr.write(`session log export prepare failed: ${detail}\n`)
+          }
           return new Response('session log export failed to prepare the stored artifact', { status: 500 })
         }
         if (root === undefined) {
           return new Response('session not found', { status: 404 })
+        }
+        const zipHeaders = {
+          'content-type': 'application/zip',
+          'content-disposition': `attachment; filename="${sessionLogZipFilename(request.sessionId)}"`,
+        }
+        if (process.argv[0] === 'scriptc') {
+          try {
+            const bytes = await bufferSessionLogZip(
+              ready,
+              root,
+              request.sessionId,
+              request.includeDescendants === true,
+              sessionExportCompressionLevel,
+              signal,
+            )
+            return new Response(bytes as BodyInit, { headers: zipHeaders })
+          } catch (error: unknown) {
+            signal.throwIfAborted()
+            process.stderr.write(
+              `session log export zip failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,
+            )
+            return new Response('session log export failed to build the archive', { status: 500 })
+          }
         }
         return new Response(
           streamSessionLogZip(
@@ -3581,12 +3613,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             sessionExportCompressionLevel,
             signal,
           ),
-          {
-            headers: {
-              'content-type': 'application/zip',
-              'content-disposition': `attachment; filename="${sessionLogZipFilename(request.sessionId)}"`,
-            },
-          },
+          { headers: zipHeaders },
         )
       },
     },
