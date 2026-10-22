@@ -30,7 +30,11 @@ interface DefaultWeb {
  * @param options - additional profile patches and test data prepared before startup.
  */
 export async function withDefaultWeb(
-  test: TestContext,
+  test: {
+    signal: AbortSignal
+    task: Pick<TestContext['task'], 'timeout'>
+    onTestFinished: (cleanup: () => void | Promise<void>) => void
+  },
   inspect: (app: DefaultWeb) => Promise<void>,
   options: { patches?: readonly string[]; prepare?: (root: string) => Promise<void> } = {},
 ): Promise<void> {
