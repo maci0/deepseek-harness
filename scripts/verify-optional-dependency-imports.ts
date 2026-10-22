@@ -27,7 +27,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { TypeScriptProject, type CompilerFace } from './ts-project.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -208,7 +208,6 @@ function main(): void {
   process.exit(1)
 }
 
-// Run only when invoked as a script, not when imported by a test.
 if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
   main()
 }

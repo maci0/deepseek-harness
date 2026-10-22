@@ -10,27 +10,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { listApplyPlugins } from './list-plugins.mjs'
+import { parseNpmStatic } from './coverage.mjs'
 
 const DEGRADED = new Map()
-
-const LIVE = new Set([
-  '@deepseek-ai/dsh-schedule',
-  '@deepseek-ai/dsh-sdk-jsonrpc-server',
-  '@deepseek-ai/dsh-subagent-codex',
-  '@deepseek-ai/dsh-tmux-context',
-  '@deepseek-ai/dsh-tool-session-query',
-  '@deepseek-ai/dsh-web-fetch-http',
-  '@deepseek-ai/dsh-web-search-exa',
-  '@deepseek-ai/dsh-web-search-perplexity',
-])
-
-const E2E = new Set([
-  '@deepseek-ai/dsh-e2b',
-  '@deepseek-ai/dsh-fs-e2b',
-  '@deepseek-ai/dsh-subprocess-e2b',
-  '@deepseek-ai/dsh-authorization',
-  '@deepseek-ai/dsh-invariants',
-])
 
 function parseArgs(argv) {
   const out = { root: '', bin: '', coverage: '', outFile: '' }
@@ -56,20 +38,10 @@ function relDir(root, abs) {
   return relative(root, abs).split('\\').join('/')
 }
 
-function parseCoverage(text) {
-  const staticHits = new Set()
-  const fallback = new Map()
-  const section = text.split('npm packages compiled statically')[1] ?? ''
-  for (const match of section.matchAll(/^\s+(\S+)\s+static\s*$/gm)) staticHits.add(match[1])
-  for (const match of section.matchAll(/^\s+(\S+)\s+island fallback(?:\s+\((.+)\))?\s*$/gm)) {
-    fallback.set(match[1], match[2] ?? '')
-  }
-  return { staticHits, fallback }
-}
-
 function dumpConfigNames(bin) {
   const names = new Set()
-  if (bin === '' || !existsSync(bin)) return names
+  if (bin === '') return names
+  if (!existsSync(bin)) throw new Error(`Native binary missing: ${bin}`)
   const home = mkdtempSync(join(tmpdir(), 'dsh-status-'))
   try {
     const env = { ...process.env, DSH_HOME: home }
@@ -79,6 +51,9 @@ function dumpConfigNames(bin) {
       timeout: 45000,
       env,
     })
+    if (result.error !== undefined || result.status !== 0) {
+      throw new Error(`Native config dump failed (status ${result.status}, signal ${result.signal})`, { cause: result.error })
+    }
     const out = `${result.stdout}\n${result.stderr}`
     for (const match of out.matchAll(/@deepseek-ai\/[A-Za-z0-9_.-]+/g)) names.add(match[0])
   } finally {
@@ -87,37 +62,24 @@ function dumpConfigNames(bin) {
   return names
 }
 
-function testedLabel(name, boot) {
-  const tags = []
-  if (E2E.has(name)) tags.push('e2e')
-  if (LIVE.has(name)) tags.push('live')
-  if (boot.has(name)) tags.push('boot')
-  tags.push('resolve')
-  return `yes (${tags.join(', ')})`
-}
-
 function main() {
   const args = parseArgs(process.argv)
   const plugins = listApplyPlugins(args.root)
   const embedSrc = readFileSync(join(args.root, 'packages/test-support/native-embed/src/bin.ts'), 'utf8')
   let coverage = { staticHits: new Set(), fallback: new Map() }
   if (args.coverage !== '' && existsSync(args.coverage)) {
-    coverage = parseCoverage(readFileSync(args.coverage, 'utf8'))
+    const parsed = parseNpmStatic(readFileSync(args.coverage, 'utf8'))
+    if (!parsed.hasSection) throw new Error('Expected scriptc 0.3 package compilation report')
+    coverage = { staticHits: new Set(parsed.staticHits), fallback: new Map(parsed.refusedHits) }
   }
   const boot = dumpConfigNames(args.bin)
-  // native-binary.test.mjs "every inventoried plugin applies and activates on
-  // the web profile" boots every non-default plugin through its own
-  // composition (recipe configs, disabled conflicts, dependency rows, preset
-  // sessions), so every inventoried plugin now has boot-level evidence.
-  for (const plugin of plugins) boot.add(plugin.name)
-
   const rows = plugins.map((plugin) => {
     const embedded = embedSrc.includes(`void import('${plugin.name}')`) || embedSrc.includes(`import '${plugin.name}'`)
     const degraded = DEGRADED.get(plugin.name)
     let embed = 'not-embedded'
     if (embedded) embed = degraded !== undefined ? 'embedded-degraded' : 'embedded'
     let npmStatic = 'unknown'
-    if (coverage.fallback.has(plugin.name)) npmStatic = `island fallback`
+    if (coverage.fallback.has(plugin.name)) npmStatic = 'refused'
     else if (coverage.staticHits.has(plugin.name)) npmStatic = 'static'
     return {
       name: plugin.name,
@@ -125,7 +87,7 @@ function main() {
       kinds: plugin.kinds.join('+'),
       embed,
       npmStatic,
-      tested: embedded ? testedLabel(plugin.name, boot) : 'no',
+      tested: boot.has(plugin.name) ? 'config only' : 'not verified',
       note: degraded ?? '',
     }
   })
@@ -136,7 +98,7 @@ function main() {
     degraded: rows.filter((r) => r.embed === 'embedded-degraded').length,
     missing: rows.filter((r) => r.embed === 'not-embedded').length,
     staticHits: rows.filter((r) => r.npmStatic === 'static').length,
-    fallback: rows.filter((r) => r.npmStatic.startsWith('island')).length,
+    fallback: rows.filter((r) => r.npmStatic === 'refused').length,
     boot: rows.filter((r) => r.tested.includes('boot')).length,
     live: rows.filter((r) => r.tested.includes('live')).length,
     e2e: rows.filter((r) => r.tested.includes('e2e')).length,
@@ -146,13 +108,14 @@ function main() {
   lines.push('# Native plugin status')
   lines.push('')
   lines.push('Generated by `packages/test-support/native-embed/src/gen-plugin-status.mjs`.')
+  lines.push('')
   lines.push('Do not edit the table by hand. Re-run the generator after a native rebuild.')
   lines.push('')
   lines.push('## Legend')
   lines.push('')
-  lines.push('- **embed**: `embedded` is in the island `void import()` table. `embedded-degraded` is in the table but a stub blocks a feature if you exercise it. `not-embedded` cannot load on this binary.')
-  lines.push('- **npm-static**: `scriptc coverage --npm-static` line for that package (`static` or `island fallback`). Runtime for `void import()` plugins is still the island table.')
-  lines.push('- **tested**: `resolve` is the full-set native `--patch` (Cordis `import(name)` does not fail). `boot` is in default web `--dump-config`. `live` is `pluginInventory` after `--patch`. `e2e` is a dedicated native-binary test.')
+  lines.push('- **embed**: `embedded` means a literal import appears in the compile entry. It does not establish runtime resolution or activation.')
+  lines.push('- **npm-static**: compiler admission reports `static`, `refused`, or `unknown`. Admission does not prove runtime behavior.')
+  lines.push('- **tested**: `config only` means the name appears in Web config output; `not verified` means no evidence was supplied. Neither label establishes plugin activation or end-to-end behavior.')
   lines.push('')
   lines.push('## Counts')
   lines.push('')
@@ -161,7 +124,7 @@ function main() {
   lines.push(`- embedded-degraded: ${counts.degraded}`)
   lines.push(`- not-embedded: ${counts.missing}`)
   lines.push(`- npm-static static: ${counts.staticHits}`)
-  lines.push(`- npm-static island fallback: ${counts.fallback}`)
+  lines.push(`- npm-static refused: ${counts.fallback}`)
   lines.push(`- tested boot (default web dump-config): ${counts.boot}`)
   lines.push(`- tested live (inventory after patch): ${counts.live}`)
   lines.push(`- tested e2e (named native test): ${counts.e2e}`)
@@ -187,8 +150,8 @@ function main() {
     process.exit(1)
   }
   if (args.coverage !== '' && counts.fallback > 0) {
-    const names = rows.filter((r) => r.npmStatic.startsWith('island')).map((r) => r.name)
-    process.stderr.write(`npm-static island fallback:\n${names.map((n) => `  ${n}\n`).join('')}`)
+    const names = rows.filter((r) => r.npmStatic === 'refused').map((r) => r.name)
+    process.stderr.write(`npm-static refused:\n${names.map((n) => `  ${n}\n`).join('')}`)
     process.exit(1)
   }
 }

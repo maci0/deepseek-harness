@@ -1,9 +1,12 @@
 /**
  * Child-process entry for the Win32 folder dialog: blocks THIS process
  * inside the modal `Show` so the host event loop stays live, reporting over
- * the IPC channel. Spawned as a child process (not a worker thread) so the
- * dialog is the process's first window and Windows activates it without a
- * manual foreground call. Protocol: `{kind:'showing',threadId}` right
+ * the IPC channel. Spawned as a child process (not a worker thread) so a
+ * native fault stays contained and the modal call never wedges the host.
+ * A background host (the web GUI server) leaves this process without
+ * foreground rights, so `runFolderDialog` synthesizes an Alt press
+ * immediately before `Show` and the dialog then activates as foreground.
+ * Protocol: `{kind:'showing',threadId}` right
  * before the blocking call (the driver's abort lever needs the native
  * thread id), then exactly one of `{kind:'done',path}` or
  * `{kind:'error',message}`.
@@ -30,7 +33,7 @@ const send = process.send.bind(process)
 const post = (message: Win32DialogWorkerMessage): void => {
   // Flush before closing the channel; the process exits when the loop drains.
   /* v8 ignore next 3 -- disconnect needs a live IPC channel the unit lane must not sever (built-worker.e2e.ts owns the real close path). */
-  send(message, () => { if (process.connected) process.disconnect() })
+  send(message, () => { if (process.connected) process.disconnect?.() })
 }
 
 // A settled driver (or a dead parent) must not orphan a dialog still on screen.

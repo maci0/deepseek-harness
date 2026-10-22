@@ -2,7 +2,7 @@
 
 import { existsSync, globSync } from 'node:fs'
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 
 type ProjectFace = 'host' | 'client'
 

@@ -1,4 +1,4 @@
-import ts from 'typescript'
+import ts from 'typescript-api'
 
 const decoratorSyntax = /^\s*@[A-Za-z_$][\w$]*/m
 

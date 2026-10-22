@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-07-06-node-engine-floor.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-06-node-engine-floor.md
-2026-07-06-node-engine-floor.md: 4d24a861bfa1a27b5aa4e07da1ed21452c7be566
-2026-07-06-node-engine-floor.zh.md: 180bfafb913f6af4d795a9b879004ceb4e7d12a3
+/agent-note-align-the-workspace-node-floor-with-installed-tools:
+  en: ef9e50753b3f1a26
+  zh: de930ec5522d92c1
+/agent-note-align-the-workspace-node-floor-with-installed-tools/problem:
+  en: d7bf1b1699ce0dc8
+  zh: f10dfd0e4787bb44
+/agent-note-align-the-workspace-node-floor-with-installed-tools/decision:
+  en: c3e29a83f2b77ad7
+  zh: a9d17b3c920d5380
+/agent-note-align-the-workspace-node-floor-with-installed-tools/consequences:
+  en: cda702f6828deaeb
+  zh: 87c49e28bae6d90d
+/agent-note-align-the-workspace-node-floor-with-installed-tools/alternatives-considered:
+  en: 901743fc3d243aab
+  zh: 7ae2ef99da3a8757

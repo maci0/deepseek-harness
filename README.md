@@ -1,64 +1,77 @@
-# Native dsh
+# DeepSeek Harness
 
 English | [中文](README.zh.md)
 
-Single-file [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) for Linux x86_64. Compiled with [scriptc](https://scriptc.dev/). No Node, no npm install, no glibc.
+DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 
-This repository is the native fork. Branch [`native/all`](https://github.com/maci0/deepseek-harness/tree/native/all) is the product source. For `npx @deepseek-ai/dsh`, use [upstream](https://github.com/deepseek-ai/deepseek-harness).
+It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
+
+Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+
+## Developer preview
+
+DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+
+Review the [safety notice](SAFETY.md) before running the project.
 
 ## Run
 
-Download the latest `dsh-native-*-linux-x64.tar.gz` from [Releases](https://github.com/maci0/deepseek-harness/releases):
+### Run from `npm`
 
-```
-tar -xzf dsh-native-*-linux-x64.tar.gz
-cd dsh-native-*-linux-x64
-chmod +x dsh
-./dsh --profile web
-```
+Install `Node.js`, then run:
 
-That prints `dsh web: http://127.0.0.1:<port>` and serves the browser UI. With no `--port`, the binary binds a free port so it does not collide with a Node dsh on 3080. Keep `dsh` next to `package.json`, `landlock-run`, and the `dsh-*-worker.cjs` files.
-
-```
-./dsh -V
-./dsh --profile web --help
-./dsh --profile headless --help
-./dsh --profile web --dump-config
-./dsh --profile web --no-open --port 0
+```sh
+npx @deepseek-ai/dsh web
 ```
 
-Session data is `$HOME/.dsh-native` unless `DSH_HOME` is set. `DSH_INSTALL` is not required. Put `DEEPSEEK_API_KEY` in the environment, or in `$DSH_HOME/.env`.
+The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
 
-## What this is
+### Run from source
 
-`dsh` is a musl-static ELF. Every inventoried Cordis plugin is embedded at compile time. Cordis `import(name)` at boot hits that table. You cannot add npm plugins after compile.
+To run from a repository checkout:
 
-Per-plugin directory, native compile status (`embedded` / `embedded-degraded` / `not-embedded`, and `static` vs island fallback), and whether it was tested: [NATIVE-PLUGIN-STATUS.md](packages/test-support/native-embed/NATIVE-PLUGIN-STATUS.md).
+```sh
+git clone https://github.com/deepseek-ai/deepseek-harness.git
+cd deepseek-harness
+pnpm install
+pnpm run build
+pnpm dsh web
+```
 
-## Limits
+`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 
-- Linux x86_64 only
-- `koffi` is still a no-op (no `process.dlopen`). sharp admission, node-pty, and landlock use island substitutes (`landlock-run` next to `dsh`)
-- Default persistence is JSONL; `node:sqlite` is available when a sqlite plugin is mounted
-- `dsh plugin ...` is stubbed
-- Island HTTP has no WebSocket upgrade. Event streams use SSE (`GET /api/events.mux`)
-- Dynamic package host halves evaluate with `Function`, not `node:vm`. Tight loops are not interrupted
+## Community and support
 
-## Source
+- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
+- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
+- Join <a href="https://discord.gg/4MrtZUhpxg">DeepSeek Harness Discord community</a>.
 
-[`native/all`](https://github.com/maci0/deepseek-harness/tree/native/all) rebases onto [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). `master` on this fork mirrors upstream and is not the native product.
+## Contributing
 
-Native patches on this fork:
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- [#1](https://github.com/maci0/deepseek-harness/pull/1) CLI / scriptc shims
-- [#2](https://github.com/maci0/deepseek-harness/pull/2) JSONL persistence
-- [#3](https://github.com/maci0/deepseek-harness/pull/3) host web API
-- [#4](https://github.com/maci0/deepseek-harness/pull/4) native-embed plugins
+## Development
 
-## Rebuild
+Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
 
-Releases are how you run it. This branch is the source that `scriptc` compiles. Native checks: `packages/test-support/native-embed/tests/native-binary.test.mjs`. The compiler Makefile and `dist/` live in the sibling compiler workspace, not in this git tree.
+`pnpm run dev:web` builds, serves, and rebuilds client bundles on source edits in one terminal, and `make help` lists the matching Make targets for Web and Desktop; the guide's application commands section owns the full table.
+
+For agents, follow [AGENTS.md](AGENTS.md).
+
+## Citation
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
 
 ## License
 
-Same as DeepSeek Harness ([MIT](LICENSE)). Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE)
+
+Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

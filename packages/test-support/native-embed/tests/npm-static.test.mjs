@@ -1,7 +1,6 @@
 /**
  * Real `scriptc coverage` of the native compile entry with `--npm-static`
- * for every inventoried plugin. Asserts each name is `static`, never
- * `island fallback`. Runs twice.
+ * for every inventoried plugin. Reject refusals and runtime fences. Runs twice.
  */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -10,18 +9,18 @@ import { fileURLToPath } from 'node:url'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { listApplyPluginNames } from '../src/list-plugins.mjs'
+import { parseNpmStatic } from '../src/coverage.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../../../..')
 const workspaceRoot = resolve(repoRoot, '..')
-const scriptc = join(workspaceRoot, 'tools/node_modules/.bin/scriptc')
-const patchSdk = join(workspaceRoot, 'tools/patch-mcp-sdk-exports.mjs')
+const scriptc = join(workspaceRoot, 'tools/scriptc-node.mjs')
 const entry = join(here, '../src/bin.ts')
-const scratch = process.env.SCRATCH ?? '/tmp/grok-goal-a4c7cd5a2606/implementer'
+const scratch = process.env.SCRATCH ?? join(workspaceRoot, '.scratch')
 const coverageTimeoutMs = 300_000
 
 function runCoverage(names) {
-  const args = ['coverage', entry, '--dynamic']
+  const args = ['coverage', entry, '--fail-on', 'divergences']
   for (const name of names) args.push('--npm-static', name)
   const env = { ...process.env }
   if (env.HOME) env.PATH = `${env.HOME}/.local/bin:${env.PATH ?? ''}`
@@ -35,33 +34,22 @@ function runCoverage(names) {
   return { status: result.status, signal: result.signal, error: result.error, out }
 }
 
-function parseNpmStatic(out) {
-  const marker = 'npm packages compiled statically'
-  const idx = out.indexOf(marker)
-  const section = idx === -1 ? '' : out.slice(idx)
-  const staticHits = [...section.matchAll(/^\s+(\S+)\s+static\s*$/gm)].map((match) => match[1])
-  const fallbackHits = [...section.matchAll(/^\s+(\S+)\s+island fallback(?:\s+\((.+)\))?\s*$/gm)]
-    .map((match) => [match[1], match[2] ?? ''])
-  return { staticHits, fallbackHits, hasSection: idx !== -1 }
-}
-
 function assertAllStatic(names, parsed, out) {
-  assert.ok(parsed.hasSection, `missing "npm packages compiled statically" section\n${out.slice(-4000)}`)
+  assert.ok(parsed.hasSection, `missing "npm package compilation" section\n${out.slice(-4000)}`)
   const staticSet = new Set(parsed.staticHits)
-  const fallback = parsed.fallbackHits.filter(([name]) => names.includes(name))
+  const refused = parsed.refusedHits.filter(([name]) => names.includes(name))
   assert.equal(
-    fallback.length,
+    refused.length,
     0,
-    `inventoried plugins reported island fallback:\n${fallback.map(([n, r]) => `  ${n} (${r})`).join('\n')}`,
+    `inventoried plugins refused:\n${refused.map(([n, r]) => `  ${n} (${r})`).join('\n')}`,
   )
+  assert.doesNotMatch(out, /deferred to runtime\s+[1-9]\d* sites/u, 'runtime fences cannot certify working native plugins')
   const missing = names.filter((name) => !staticSet.has(name))
   assert.deepEqual(missing, [], `inventoried plugins missing a static line: ${missing.join(', ')}`)
 }
 
 test('scriptc --npm-static every inventoried plugin is static (two passes)', { timeout: 600_000 }, () => {
   mkdirSync(scratch, { recursive: true })
-  const patched = spawnSync(process.execPath, [patchSdk], { encoding: 'utf8' })
-  assert.equal(patched.status, 0, patched.stderr || patched.stdout)
   const names = listApplyPluginNames(repoRoot)
   assert.ok(names.length > 0, 'plugin scanner returned no names')
   const first = runCoverage(names)

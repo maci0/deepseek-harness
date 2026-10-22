@@ -1,0 +1,11 @@
+diff --git a/stream.d.ts b/stream.d.ts
+--- a/stream.d.ts
++++ b/stream.d.ts
+@@ -1147,6 +1147,7 @@
+                     | ((source: AsyncIterable<any>) => AsyncIterable<any>)
+                     | ((source: AsyncIterable<any>) => Promise<void>)
+                     | Promise<any>
++                    | { readable: NodeJS.ReadableStream; writable: NodeJS.WritableStream }
+                     | web.ReadableWritablePair
+                     | web.ReadableStream
+                     | web.WritableStream,

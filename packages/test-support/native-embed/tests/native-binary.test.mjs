@@ -5,15 +5,20 @@
  * is the install anchor.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { gzipSync, inflateRawSync } from 'node:zlib'
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { inflateRawSync, zstdCompressSync, zstdDecompressSync } from 'node:zlib'
+import { createHash, randomUUID } from 'node:crypto'
+import { createServer } from 'node:http'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 import { listApplyPluginNames } from '../src/list-plugins.mjs'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { AssistantStreamAccumulator, BlockAssembler, createAssistantMessage } from '@deepseek-ai/dsh-llm'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../../../..')
@@ -21,6 +26,7 @@ const workspaceRoot = resolve(repoRoot, '..')
 const defaultBin = join(workspaceRoot, 'dist/dsh')
 const bin = process.env.DSH_NATIVE_BIN ?? defaultBin
 const install = join(repoRoot, 'apps/cli/package.json')
+const WebSocket = createRequire(import.meta.resolve('@deepseek-ai/dsh-api-gateway'))('ws')
 
 /** Copy process.env, overlay `extra`, drop DSH_INSTALL. `undefined` values remove keys. */
 function nativeEnv(extra = {}) {
@@ -113,7 +119,7 @@ async function bootNativeWeb(env, extraArgs = ['--port', '0'], { openBrowser = f
   child.stderr.setEncoding('utf8')
   child.stdout.on('data', (chunk) => { state.stdout += chunk })
   child.stderr.on('data', (chunk) => { state.stderr += chunk })
-  const url = await new Promise((resolveUrl, reject) => {
+  const bootstrapUrl = await new Promise((resolveUrl, reject) => {
     const deadline = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error(`web boot timed out (listen)\nstdout:\n${state.stdout}\nstderr:\n${state.stderr}`))
@@ -124,7 +130,7 @@ async function bootNativeWeb(env, extraArgs = ['--port', '0'], { openBrowser = f
     }
     child.once('exit', onExit)
     const look = () => {
-      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
+      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=\S+)/)
       if (match) {
         clearTimeout(deadline)
         child.off('exit', onExit)
@@ -134,34 +140,92 @@ async function bootNativeWeb(env, extraArgs = ['--port', '0'], { openBrowser = f
     child.stdout.on('data', look)
     look()
   })
+  const url = new URL(bootstrapUrl).origin
   const dump = (surface = 'listen') => (
     `${surface}: url=${url} exit=${child.exitCode}\nstdout:\n${state.stdout}\nstderr:\n${state.stderr}`
   )
   const stop = async () => {
     child.stdout?.destroy()
     child.stderr?.destroy()
-    if (child.exitCode !== null) return
+    if (child.exitCode !== null || child.signalCode !== null) return
     child.kill('SIGKILL')
     await Promise.race([
       new Promise((resolveExit) => child.once('exit', resolveExit)),
       delay(2000),
     ])
   }
-  return { child, url, state, dump, stop }
+  try {
+    const bootstrap = await fetch(bootstrapUrl, { redirect: 'manual', signal: AbortSignal.timeout(5000) })
+    assert.ok(bootstrap.status === 302 || bootstrap.status === 303, `bootstrap HTTP ${bootstrap.status}`)
+    const cookie = bootstrap.headers.getSetCookie().map(value => value.split(';', 1)[0]).join('; ')
+    assert.ok(cookie, 'bootstrap must establish an authenticated session')
+    await bootstrap.arrayBuffer()
+    const request = (input, options = {}) => {
+      const target = new URL(input, url)
+      assert.equal(target.origin, url, 'test credentials must stay on their owning server')
+      const headers = new Headers(options.headers)
+      headers.set('cookie', cookie)
+      return fetch(target, { ...options, headers })
+    }
+    const openEvents = async () => {
+      const socket = new WebSocket(`${url.replace('http:', 'ws:')}/api/remote.mux`, { headers: { cookie } })
+      const errors = []
+      socket.on('error', error => errors.push(error))
+      try {
+        const ready = await new Promise((resolveReady, reject) => {
+          const deadline = setTimeout(() => finish(new Error('Remote event stream timed out')), 10000)
+          const finish = (error, value) => {
+            clearTimeout(deadline)
+            socket.off('error', fail)
+            socket.off('close', closed)
+            socket.off('message', message)
+            error ? reject(error) : resolveReady(value)
+          }
+          const fail = error => finish(error)
+          const closed = () => finish(new Error('Remote event stream closed before ready'))
+          const message = data => {
+            try {
+              const frame = JSON.parse(data.toString())
+              if (frame.type === 'error') finish(new Error(JSON.stringify(frame)))
+              else if (frame.type === 'item' && frame.streamId === 'events') finish(null, frame.value)
+            } catch (error) { finish(error) }
+          }
+          socket.once('error', fail)
+          socket.once('close', closed)
+          socket.on('message', message)
+          socket.once('open', () => socket.send(JSON.stringify({
+            type: 'open', streamId: 'events', endpoint: '$events', payload: { args: {} },
+          })))
+        })
+        return { socket, errors, ready }
+      } catch (error) {
+        socket.terminate()
+        throw error
+      }
+    }
+    return { child, url, bootstrapUrl, state, dump, stop, request, openEvents }
+  } catch (error) {
+    await stop()
+    throw error
+  }
 }
 
-async function postApi(url, method, payload = {}, { body } = {}) {
-  const res = await fetch(new URL(`/api/${method}`, url), {
+async function postApi(session, method, args = {}, { body } = {}) {
+  const res = await session.request(`/api/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     ...body === undefined
-      ? { body: JSON.stringify({ type: 'client-request', rpcId: `t-${method}`, method, payload }) }
+      ? { body: JSON.stringify({ type: 'client-request', rpcId: `t-${method}`, method, payload: { args } }) }
       : body === null ? {} : { body },
     signal: AbortSignal.timeout(10000),
   })
   const text = await res.text()
   return { res, text }
 }
+
+const createSession = (session, request = {}) => postApi(session, 'session/create', { request })
+const promptSession = (session, request) => postApi(session, 'session/prompt', { request: { requestId: randomUUID(), ...request } })
+const listSessions = (session, request = {}) => postApi(session, 'session/list', { _request: request })
 
 function assertRpcOk(method, { res, text }, dump) {
   assert.equal(res.status, 200, `/api/${method}: HTTP ${res.status}\n${text}\n${dump(`/api/${method}`)}`)
@@ -187,16 +251,20 @@ async function bootWebAndFetch(env, extraArgs = ['--port', '0'], { openBrowser =
     assert.doesNotMatch(state.stderr, /EADDRINUSE/, dump('listen'))
     assert.doesNotMatch(state.stderr, /Uncaught/, dump('listen'))
     assert.doesNotMatch(state.stderr, /child_process\.spawn is not available/, dump('listen'))
-    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    const res = await session.request(url, { signal: AbortSignal.timeout(5000) })
     const body = await res.text()
     assert.equal(res.status, 200, `${dump('listen')}\nbody:\n${body.slice(0, 500)}`)
     assert.match(body, /<!doctype html>/i)
     assert.doesNotMatch(body, /Vite frontend is not in this tree/)
     assert.match(body, /id="root"/)
-    const script = body.match(/src="(\/assets\/index-[^"]+\.js)"/)
-    assert.ok(script, `missing Vite index script\n${dump('listen')}\nbody:\n${body.slice(0, 500)}`)
-    const js = await fetch(new URL(script[1], url), { signal: AbortSignal.timeout(5000) })
+    const script = body.match(/<script\b(?=[^>]*\btype="module")[^>]*\bsrc="([^"]+\.js)"[^>]*>/i)
+    assert.ok(script, `missing module entry script\n${dump('listen')}\nbody:\n${body.slice(0, 500)}`)
+    const assetUrl = new URL(script[1], url)
+    assert.equal(assetUrl.origin, new URL(url).origin, 'module entry must come from the running server')
+    const js = await session.request(assetUrl, { signal: AbortSignal.timeout(5000) })
     assert.equal(js.status, 200, `asset ${script[1]} from ${url}`)
+    assert.match(js.headers.get('content-type') ?? '', /javascript/)
+    assert.ok((await js.text()).length > 0, 'module entry must contain JavaScript')
   } finally {
     await stop()
   }
@@ -227,99 +295,73 @@ test('native dsh --profile web boots without DSH_HOME (uses ~/.dsh-native)', asy
   )
 })
 
-test('native dsh --profile web picks a free port when 3080 is taken', async () => {
-  // Occupy 3080 in a child: an in-process listen can block the event loop
-  // (the suite then never reaches its own timeout).
-  const occupier = spawn(process.execPath, ['-e', `
-    const s = require('node:http').createServer();
-    s.on('error', (e) => { process.stderr.write(String(e.code || e) + '\\n'); process.exit(1); });
-    s.listen(3080, '127.0.0.1', () => process.stdout.write('ok\\n'));
-  `], { stdio: ['ignore', 'pipe', 'pipe'] })
-  occupier.stdout.setEncoding('utf8')
-  occupier.stderr.setEncoding('utf8')
-  let occupierOut = ''
-  let occupierErr = ''
-  const handshake = Promise.race([
-    new Promise((resolve, reject) => {
-      occupier.stdout.on('data', (chunk) => {
-        occupierOut += chunk
-        if (occupierOut.includes('ok')) resolve('ok')
-      })
-      occupier.stderr.on('data', (chunk) => { occupierErr += chunk })
-      occupier.once('exit', (code) => {
-        if (occupierOut.includes('ok')) return
-        reject(new Error(`3080 occupier exited ${code} without ok\nstdout:\n${occupierOut}\nstderr:\n${occupierErr}`))
-      })
-    }),
-    delay(2000).then(() => null),
-  ])
-  const gotOk = await handshake
-  assert.equal(
-    gotOk,
-    'ok',
-    `3080 occupier did not print ok\nstdout:\n${occupierOut}\nstderr:\n${occupierErr}`,
-  )
-  const bootHome = mkdtempSync(join(tmpdir(), 'dsh-native-web-busy-'))
-  try {
-    await bootWebAndFetch(nativeEnv({ DSH_HOME: bootHome }), [])
-  } finally {
-    occupier.kill('SIGKILL')
-    await Promise.race([
-      new Promise((resolve) => occupier.once('exit', resolve)),
-      delay(1000),
-    ])
-    rmSync(bootHome, { recursive: true, force: true })
-  }
+test('native dsh --profile web reports a requested port already in use', async (t) => {
+  const occupier = createServer()
+  t.after(() => new Promise((resolve) => occupier.close(resolve)))
+  await new Promise((resolve, reject) => {
+    occupier.once('error', reject)
+    occupier.listen(0, '127.0.0.1', resolve)
+  })
+  const result = run(['--profile', 'web', '--no-open', '--host', '127.0.0.1', '--port', String(occupier.address().port)])
+  assert.equal(result.error, undefined)
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.match(result.stderr, /EADDRINUSE/)
+  assert.doesNotMatch(result.stdout, /dsh web: http:/)
 })
 
 test('native dsh web API', async (t) => {
   const bootHome = mkdtempSync(join(tmpdir(), 'dsh-native-api-'))
-  const session = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }))
+  let session, events
   t.after(async () => {
-    await session.stop()
+    events?.socket.terminate()
+    await session?.stop()
     rmSync(bootHome, { recursive: true, force: true })
   })
+  const { textScript, replayPatch } = writeReplayFixtures(bootHome)
+  session = await bootNativeWeb(replayEnv(bootHome, textScript, { DSH_HOME: bootHome }), ['--port', '0'], { patchFiles: [replayPatch] })
   const { child, url, state, dump } = session
   assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/, dump('listen'))
   assert.equal(child.exitCode, null, dump('listen'))
   console.log(`native-web-url ${url}`)
 
-  await t.test('/api/host.describe', async () => {
-    const got = await postApi(url, 'host.describe')
-    assertRpcOk('host.describe', got, dump)
+  await t.test('Remote event stream reports host metadata', async () => {
+    events = await session.openEvents()
+    assert.equal(events.ready.type, 'ready', JSON.stringify(events.ready))
+    assert.equal(typeof events.ready.clientId, 'string')
+    assert.equal(events.ready.host.home, process.env.HOME)
   })
-  await t.test('/api/llm.providers', async () => {
-    const got = await postApi(url, 'llm.providers')
-    const body = assertRpcOk('llm.providers', got, dump)
-    assert.ok(Array.isArray(body.result.value.providers), got.text)
-    assert.ok(body.result.value.providers.length > 0, got.text)
+  await t.test('/api/session/modelCatalog', async () => {
+    const got = await postApi(session, 'session/modelCatalog')
+    const body = assertRpcOk('session/modelCatalog', got, dump)
+    assert.ok(Array.isArray(body.result.value.groups), got.text)
+    assert.ok(body.result.value.groups.length > 0, got.text)
   })
-  await t.test('/api/agentPreset.list', async () => {
-    const got = await postApi(url, 'agentPreset.list')
-    const body = assertRpcOk('agentPreset.list', got, dump)
+  await t.test('/api/agentPresets/list', async () => {
+    const got = await postApi(session, 'agentPresets/list')
+    const body = assertRpcOk('agentPresets/list', got, dump)
     assert.ok(Array.isArray(body.result.value.presets), got.text)
   })
-  await t.test('/api/settings.describe', async () => {
-    const got = await postApi(url, 'settings.describe')
-    const body = assertRpcOk('settings.describe', got, dump)
+  await t.test('/api/settings/describe', async () => {
+    const got = await postApi(session, 'settings/describe')
+    const body = assertRpcOk('settings/describe', got, dump)
     assert.equal(body.result.value.writable, true, got.text)
   })
-  await t.test('/api/session.create', async () => {
-    const got = await postApi(url, 'session.create')
-    const body = assertRpcOk('session.create', got, dump)
+  await t.test('/api/session/create', async () => {
+    const got = await createSession(session)
+    const body = assertRpcOk('session/create', got, dump)
     console.log(`session-create ${got.text}`)
     assert.equal(typeof body.result.value.sessionId, 'string', got.text)
   })
   await t.test('/api/session.export returns a zip', async () => {
-    const created = await postApi(url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, dump).result.value.sessionId
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, dump).result.value.sessionId
     const exportUrl = new URL('/api/session.export', url)
     exportUrl.searchParams.set('sessionId', sessionId)
     exportUrl.searchParams.set('includeDescendants', 'true')
-    const head = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+    const head = await session.request(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
     const headText = await head.text().catch(() => '')
     assert.equal(head.status, 200, `HEAD session.export HTTP ${head.status}\n${headText}\n${dump('session.export')}`)
-    const got = await fetch(exportUrl, { method: 'GET', signal: AbortSignal.timeout(15000) })
+    const got = await session.request(exportUrl, { method: 'GET', signal: AbortSignal.timeout(15000) })
     const body = Buffer.from(await got.arrayBuffer())
     assert.equal(got.status, 200, `GET session.export HTTP ${got.status}\n${body.subarray(0, 300).toString()}\n${dump('session.export')}`)
     assert.match(got.headers.get('content-type') ?? '', /zip/)
@@ -342,10 +384,10 @@ test('native dsh web API', async (t) => {
       `idle web burned ${used} ticks in 1s (~100 is a full core)\n${dump('idle cpu')}`,
     )
   })
-  await t.test('session.prompt keeps the jsonl header and export stays 200', async () => {
-    const created = await postApi(url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, dump).result.value.sessionId
-    const prompted = await postApi(url, 'session.prompt', {
+  await t.test('session/prompt keeps the jsonl header and export stays 200', async () => {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'ping' }],
@@ -354,15 +396,15 @@ test('native dsh web API', async (t) => {
     assert.equal(prompted.res.status, 200, prompted.text)
     await delay(800)
     const logs = listSessionJsonl(bootHome)
-    assert.ok(logs.length > 0, `no session.jsonl under ${bootHome}\n${dump('session.prompt persist')}`)
+    assert.ok(logs.length > 0, `no session.jsonl under ${bootHome}\n${dump('session/prompt persist')}`)
     const matching = logs.filter((path) => path.includes(sessionId))
     assert.ok(matching.length > 0, `session ${sessionId} jsonl missing: ${logs.join('\n')}`)
-    const first = readFileSync(matching[0], 'utf8').split('\n', 1)[0]
-    assert.match(first, /"type":"session"/, `jsonl lost its header:\n${first}\n${dump('session.prompt persist')}`)
+    const first = readSessionJsonl(matching[0]).split('\n', 1)[0]
+    assert.match(first, /"type":"session"/, `jsonl lost its header:\n${first}\n${dump('session/prompt persist')}`)
     const exportUrl = new URL('/api/session.export', url)
     exportUrl.searchParams.set('sessionId', sessionId)
     exportUrl.searchParams.set('includeDescendants', 'true')
-    const head = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+    const head = await session.request(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
     const headText = await head.text().catch(() => '')
     assert.equal(
       head.status,
@@ -370,10 +412,10 @@ test('native dsh web API', async (t) => {
       `HEAD session.export after prompt HTTP ${head.status}\n${headText}\n${dump('session.export after prompt')}`,
     )
   })
-  await t.test('/api/session.prompt accepts IANA clientTimeZone', async () => {
-    const created = await postApi(url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, dump).result.value.sessionId
-    const zoned = await postApi(url, 'session.prompt', {
+  await t.test('/api/session/prompt accepts IANA clientTimeZone', async () => {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, dump).result.value.sessionId
+    const zoned = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'ping' }],
@@ -381,20 +423,18 @@ test('native dsh web API', async (t) => {
     })
     assert.equal(zoned.res.status, 200, zoned.text)
     const zonedBody = JSON.parse(zoned.text)
-    assert.notEqual(
-      zonedBody.result?.error?.code,
-      'invalid-time-zone',
-      `IANA clientTimeZone rejected on native\n${zoned.text}\n${dump('session.prompt')}`,
-    )
-    const utc = await postApi(url, 'session.prompt', {
+    assertRpcOk('session/prompt with IANA clientTimeZone', zoned, dump)
+    assert.equal(zonedBody.result.value.accepted, true, zoned.text)
+    const utc = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'ping' }],
       clientTimeZone: 'UTC',
     })
     const utcBody = JSON.parse(utc.text)
-    assert.notEqual(utcBody.result?.error?.code, 'invalid-time-zone', utc.text)
-    const cst = await postApi(url, 'session.prompt', {
+    assertRpcOk('session/prompt with UTC', utc, dump)
+    assert.equal(utcBody.result.value.accepted, true, utc.text)
+    const cst = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'ping' }],
@@ -402,37 +442,24 @@ test('native dsh web API', async (t) => {
     })
     const cstBody = JSON.parse(cst.text)
     assert.equal(cstBody.result?.ok, false, cst.text)
-    assert.equal(cstBody.result?.error?.code, 'invalid-time-zone', cst.text)
+    assert.equal(cstBody.result?.error?.code, 'session/invalid-time-zone', cst.text)
   })
   await t.test('/api empty POST is HTTP 400', async () => {
-    const empty = await postApi(url, 'llm.providers', {}, { body: null })
-    assert.equal(empty.res.status, 400, `/api/llm.providers empty POST: HTTP ${empty.res.status}\n${empty.text}\n${dump('empty POST')}`)
+    const empty = await postApi(session, 'session/modelCatalog', {}, { body: null })
+    assert.equal(empty.res.status, 400, `/api/session/modelCatalog empty POST: HTTP ${empty.res.status}\n${empty.text}\n${dump('empty POST')}`)
   })
-  await t.test('events.mux stays up through session.create', async () => {
-    const mux = new URL('/api/events.mux', url)
-    const ac = new AbortController()
-    const res = await fetch(mux, { signal: ac.signal })
-    assert.equal(res.status, 200, `GET events.mux HTTP ${res.status}\n${dump('events.mux')}`)
-    assert.match(res.headers.get('content-type') ?? '', /text\/event-stream/, dump('events.mux'))
-    try {
-      const got = await postApi(url, 'session.create')
-      assertRpcOk('session.create', got, dump)
-      await delay(300)
-      assert.equal(child.exitCode, null, dump('process death after mux session.create'))
-      assert.doesNotMatch(state.stderr, /Unhandled promise rejection/, dump('process death after mux session.create'))
-      assert.doesNotMatch(state.stderr, /TypeError: not a function/, dump('process death after mux session.create'))
-    } finally {
-      ac.abort()
-    }
+  await t.test('Remote event mux stays up through session/create', async () => {
+    assert.ok(events, dump('Remote event mux'))
+    const got = await createSession(session)
+    assertRpcOk('session/create', got, dump)
+    await delay(300)
+    assert.equal(events.socket.readyState, WebSocket.OPEN, dump('Remote event mux'))
+    assert.deepEqual(events.errors, [])
+    assert.equal(child.exitCode, null, dump('process death after mux session/create'))
+    assert.doesNotMatch(state.stderr, /Unhandled promise rejection|TypeError: not a function/, dump('Remote event mux'))
   })
 })
 
-/**
- * Native island zlib cannot write real zstd, so older runs left plaintext
- * `session.jsonl` (and gzip bytes named `.jsonl.zstd`) under a backend whose
- * YAML default is compression zstd. Listing or prompting those sessions used
- * to throw encodingMismatch. Plant both suffixes, then list/create/export.
- */
 function listSessionJsonl(root) {
   const files = []
   const walk = (dir) => {
@@ -440,72 +467,81 @@ function listSessionJsonl(root) {
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, ent.name)
       if (ent.isDirectory()) walk(path)
-      else if (ent.name === 'session.jsonl' || ent.name === 'session.jsonl.zstd') files.push(path)
+      else if (/^session(?:\.v[1-9]\d*)?\.jsonl(?:\.zstd)?$/.test(ent.name)) files.push(path)
     }
   }
   walk(join(root, 'sessions'))
-  return files
+  return files.filter(path => !files.some(other => dirname(other) === dirname(path)
+    && Number(other.match(/session(?:\.v(\d+))?\.jsonl/)[1] ?? 0)
+      > Number(path.match(/session(?:\.v(\d+))?\.jsonl/)[1] ?? 0)))
 }
 
-function plantJsonlSession(root, { id, cwd, compression }) {
+function readSessionJsonl(path) {
+  const bytes = readFileSync(path)
+  return (path.endsWith('.zstd') ? zstdDecompressSync(bytes) : bytes).toString('utf8')
+}
+
+function plantJsonlSession(root, { id, cwd, compression, version = SESSION_FORMAT_VERSION }) {
   const project = `--${cwd.replace(/^\/+/, '').replace(/\//g, '-')}--`
   const dir = join(root, 'sessions', project, id)
   mkdirSync(dir, { recursive: true })
-  const header = JSON.stringify({
-    type: 'session',
-    version: 0,
-    id,
-    createdAt: Date.now(),
-    cwd,
-    delegationDepth: 0,
-  })
-  const body = `${header}\n`
-  if (compression === 'zstd') {
-    writeFileSync(join(dir, 'session.jsonl.zstd'), gzipSync(body))
-  } else {
-    writeFileSync(join(dir, 'session.jsonl'), body)
-  }
+  const header = { type: 'session', version, id, createdAt: Date.now(), cwd, delegationDepth: 0 }
+  if (version >= 2) header.isSeeded = false
+  const body = Buffer.from(`${JSON.stringify(header)}\n`)
+  const path = join(dir, `session${version === 0 ? '' : `.v${version}`}.jsonl${compression === 'zstd' ? '.zstd' : ''}`)
+  const bytes = compression === 'zstd' ? zstdCompressSync(body) : body
+  writeFileSync(path, bytes)
+  return { path, bytes }
 }
 
-test('native dsh lists planted plaintext session.jsonl under default zstd config', async (t) => {
-  const bootHome = mkdtempSync(join(tmpdir(), 'dsh-native-mixed-jsonl-'))
-  const cwd = '/home/maci/dshtest'
-  const plaintextId = 'session-84e9ca32-231b-4d17-806e-81248d088450'
-  const gzipId = 'session-gzip-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-  plantJsonlSession(bootHome, { id: plaintextId, cwd, compression: 'none' })
-  plantJsonlSession(bootHome, { id: gzipId, cwd, compression: 'zstd' })
-  const session = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }))
-  t.after(async () => {
-    await session.stop()
-    rmSync(bootHome, { recursive: true, force: true })
-  })
-  const { child, url, state, dump } = session
-  assert.equal(child.exitCode, null, dump('listen'))
-  assert.doesNotMatch(state.stderr, /configured for compression/, dump('listen'))
-  assert.doesNotMatch(state.stderr, /encodingMismatch/, dump('listen'))
-
-  const listed = await postApi(url, 'session.list')
-  const listBody = assertRpcOk('session.list', listed, dump)
-  const ids = (listBody.result.value.items ?? []).map((item) => item.sessionId)
-  assert.ok(ids.includes(plaintextId), `plaintext jsonl missing from session.list: ${listed.text}`)
-  assert.ok(ids.includes(gzipId), `gzip jsonl.zstd missing from session.list: ${listed.text}`)
-
-  const created = await postApi(url, 'session.create')
-  assertRpcOk('session.create', created, dump)
-  assert.doesNotMatch(state.stderr, /configured for compression/, dump('session.create'))
-
-  for (const sessionId of [plaintextId, gzipId]) {
-    const exportUrl = new URL('/api/session.export', url)
-    exportUrl.searchParams.set('sessionId', sessionId)
-    exportUrl.searchParams.set('includeDescendants', 'true')
-    const head = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
-    const headText = await head.text().catch(() => '')
-    assert.equal(
-      head.status,
-      200,
-      `HEAD session.export ${sessionId} HTTP ${head.status}\n${headText}\n${dump('session.export')}`,
-    )
+for (const compression of ['none', 'zstd']) test(`native dsh lists and exports current and released sessions with ${compression} storage`, async (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-native-session-'))
+  let session
+  t.after(async () => { await session?.stop(); rmSync(home, { recursive: true, force: true }) })
+  const cwd = join(home, 'workspace')
+  mkdirSync(cwd)
+  const artifacts = [0, SESSION_FORMAT_VERSION].map(version => ({
+    id: `session-${randomUUID()}`,
+    version,
+  })).map(value => ({ ...value, ...plantJsonlSession(home, { ...value, cwd, compression }) }))
+  const patch = join(home, 'storage.yml')
+  writeFileSync(patch, `- id: session-persistence-jsonl\n  config:\n    root: ${JSON.stringify(join(home, 'sessions'))}\n    compression: ${compression}\n`)
+  session = await bootNativeWeb(nativeEnv({ DSH_HOME: home }), ['--port', '0'], { patchFiles: [patch] })
+  assert.doesNotMatch(session.state.stderr, /configured for compression|encodingMismatch/)
+  const listed = assertRpcOk('session/list', await listSessions(session), session.dump)
+  const ids = listed.result.value.items.map(item => item.sessionId)
+  for (const artifact of artifacts) assert.ok(ids.includes(artifact.id), 'planted Session must be listed')
+  assertRpcOk('session/create', await createSession(session), session.dump)
+  for (const artifact of artifacts) {
+    const url = new URL('/api/session.export', session.url)
+    url.searchParams.set('sessionId', artifact.id)
+    url.searchParams.set('includeDescendants', 'true')
+    const head = await session.request(url, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+    await head.arrayBuffer()
+    assert.equal(head.status, 200)
+    const exported = await session.request(url, { signal: AbortSignal.timeout(10000) })
+    assert.equal(exported.status, 200)
+    const text = zipEntryText(Buffer.from(await exported.arrayBuffer()), `session.v${SESSION_FORMAT_VERSION}.jsonl`)
+    assert.ok(text, 'export must contain the selected Session log')
+    const header = JSON.parse(text.split('\n')[0])
+    assert.equal(header.id, artifact.id)
+    assert.equal(header.version, SESSION_FORMAT_VERSION)
+    assert.deepEqual(readFileSync(artifact.path), artifact.bytes, 'reading and migration must preserve the committed generation')
   }
+})
+
+test('native dsh rejects mixed storage encodings without modifying Session artifacts', async (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-native-mixed-jsonl-'))
+  let session
+  t.after(async () => { await session?.stop(); rmSync(home, { recursive: true, force: true }) })
+  const cwd = join(home, 'workspace')
+  mkdirSync(cwd)
+  const artifacts = ['none', 'zstd'].map(compression => plantJsonlSession(home, { id: `session-${randomUUID()}`, cwd, compression }))
+  session = await bootNativeWeb(nativeEnv({ DSH_HOME: home }))
+  assert.equal(session.child.exitCode, null)
+  assert.match(session.state.stderr, /session artifact .* uses \.jsonl, but this backend is configured for compression "zstd"/)
+  assert.match(session.state.stderr, /use a separate root or select the matching compression mode/)
+  for (const artifact of artifacts) assert.deepEqual(readFileSync(artifact.path), artifact.bytes)
 })
 
 function writeInsertPatch(dir, names, filename = 'overlay.yml') {
@@ -546,18 +582,18 @@ function spawnWebPatch(env, patch, { timeoutMs = 20000 } = {}) {
       resolve(result)
     }
     const deadline = setTimeout(() => {
-      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
+      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=\S+)/)
       finish({ kind: match ? 'listen' : 'timeout', url: match?.[1], code: child.exitCode })
     }, timeoutMs)
     const onChunk = (chunk) => {
       state.stdout += chunk
-      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
+      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=\S+)/)
       if (match) finish({ kind: 'listen', url: match[1], code: child.exitCode })
     }
     child.stdout.on('data', onChunk)
     child.stderr.on('data', (chunk) => { state.stderr += chunk })
     child.once('exit', (code, signal) => {
-      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+)/)
+      const match = state.stdout.match(/dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=\S+)/)
       finish({ kind: match ? 'listen' : 'exit', url: match?.[1], code, signal })
     })
   })
@@ -592,10 +628,10 @@ test('native dsh resolves every apply() plugin', async () => {
     const result = await missing.done
     const output = `${missing.state.stdout}\n${missing.state.stderr}`
     await stopChild(missing.child)
-    assert.equal(result.kind, 'exit', `missing island name must not listen\n${output}`)
-    assert.notEqual(result.code, 0, output)
-    assert.match(output, resolveErrorPattern(MISSING_ISLAND_NAME), output)
-    assert.match(output, /scriptc embeds npm code at build time/, output)
+    assert.equal(result.kind, 'listen', 'a failed optional import must not stop the Web app')
+    assert.match(output, /failed to import:/)
+    assert.ok(output.includes(MISSING_ISLAND_NAME), 'diagnostic must identify the unavailable package')
+    assert.doesNotMatch(output, /scriptc embeds npm code at build time|scr:import-trap/)
   } finally {
     rmSync(missingDir, { recursive: true, force: true })
   }
@@ -640,7 +676,7 @@ test('native dsh resolves every apply() plugin', async () => {
     patchFiles: [livePatch],
   })
   try {
-    const got = await postApi(session.url, 'pluginInventory/list', { args: {} })
+    const got = await postApi(session, 'pluginInventory/list')
     const body = assertRpcOk('pluginInventory/list', got, session.dump)
     const entries = body.result.value.entries
     assert.ok(Array.isArray(entries), got.text)
@@ -733,7 +769,7 @@ test('native dsh --patch authorization and invariants do not import-trap', async
   }
 })
 
-test('native dsh settings.openDocument hands the file to xdg-open', async () => {
+test('native dsh settings/openSettingsDocument hands the file to xdg-open', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-native-open-cfg-'))
   const opener = join(dir, 'xdg-open')
   const opened = join(dir, 'opened')
@@ -745,13 +781,14 @@ test('native dsh settings.openDocument hands the file to xdg-open', async () => 
     PATH: `${dir}:${process.env.PATH ?? ''}`,
   }))
   try {
-    const got = await postApi(session.url, 'settings.openDocument')
-    const body = assertRpcOk('settings.openDocument', got, session.dump)
+    const got = await postApi(session, 'settings/openSettingsDocument')
+    const body = assertRpcOk('settings/openSettingsDocument', got, session.dump)
     assert.equal(body.result.value.opened, true, got.text)
     assert.doesNotMatch(got.text, /execFile is not available/, got.text)
-    assert.equal(existsSync(opened), true, `xdg-open was not invoked (${opened})\n${session.dump('settings.openDocument')}`)
+    assert.equal(existsSync(opened), true, `xdg-open was not invoked (${opened})\n${session.dump('settings/openSettingsDocument')}`)
     const target = readFileSync(opened, 'utf8').trim()
-    assert.match(target, /settings\.ya?ml$/, target)
+    assert.equal(target, join(bootHome, 'profiles', 'web', 'cordis.patch.yml'))
+    assert.equal(existsSync(target), true, 'opened profile patch must exist')
   } finally {
     await session.stop()
     rmSync(bootHome, { recursive: true, force: true })
@@ -771,16 +808,29 @@ test('native dsh binary is a statically linked ELF with no island import-trap', 
   const phentsize = bytes.readUInt16LE(54)
   const phnum = bytes.readUInt16LE(56)
   let dynamicHeaders = 0
+  let interpreters = 0
   for (let i = 0; i < phnum; i++) {
     if (bytes.readUInt32LE(phoff + i * phentsize) === 2 /* PT_DYNAMIC */) dynamicHeaders++
+    if (bytes.readUInt32LE(phoff + i * phentsize) === 3 /* PT_INTERP */) interpreters++
   }
   assert.equal(dynamicHeaders, 0, 'binary has a PT_DYNAMIC header (dynamically linked)')
+  assert.equal(interpreters, 0, 'binary requires an external ELF interpreter')
   assert.equal(countOccurrences(bytes, 'scr:import-trap'), 0, 'binary contains scr:import-trap island strings')
-  assert.ok(
-    countOccurrences(bytes, '@deepseek-ai/dsh-home-paths') > 0,
-    'CLI static-import package dsh-home-paths missing from the native code',
-  )
-  assert.ok(countOccurrences(bytes, '0.1.1-rc.5+scriptc.33') > 0, 'native build version string missing from the binary')
+  const cli = JSON.parse(readFileSync(join(repoRoot, 'apps/cli/package.json'), 'utf8'))
+  const compiler = JSON.parse(readFileSync(join(workspaceRoot, 'tools/node_modules/@scriptc/compiler/package.json'), 'utf8'))
+  const marker = JSON.parse(readFileSync(join(dirname(bin), '.dsh-build.json'), 'utf8'))
+  assert.equal(marker.version, cli.version)
+  assert.equal(marker.scriptc, compiler.version)
+  assert.equal(marker.binarySha256, createHash('sha256').update(bytes).digest('hex'))
+  const cliPackage = JSON.parse(readFileSync(join(dirname(bin), 'node_modules/@deepseek-ai/dsh/package.json'), 'utf8'))
+  assert.equal(cliPackage.version, cli.version)
+  const homePackageDir = join(dirname(bin), 'node_modules/@deepseek-ai/dsh-home-paths')
+  const homePackage = JSON.parse(readFileSync(join(homePackageDir, 'package.json'), 'utf8'))
+  assert.equal(homePackage.version, cli.version)
+  assert.ok(existsSync(join(homePackageDir, homePackage.main)), 'packaged home-paths entry is missing')
+  const version = run(['-V'])
+  assert.equal(version.status, 0, version.stderr)
+  assert.equal(version.stdout.trim(), cli.version)
 })
 
 test('native dsh --profile headless boots the plugin tree and reaches the LLM boundary', () => {
@@ -844,9 +894,9 @@ test('native dsh web runs a session round-trip with the live extras active', asy
   // The extras occupy the event loop briefly; the listener binds a tick after
   // the URL is printed. Give it a beat before the first request.
   await delay(300)
-  const created = await postApi(url, 'session.create')
-  const sessionId = assertRpcOk('session.create', created, dump).result.value.sessionId
-  const prompted = await postApi(url, 'session.prompt', {
+  const created = await createSession(session)
+  const sessionId = assertRpcOk('session/create', created, dump).result.value.sessionId
+  const prompted = await promptSession(session, {
     sessionId,
     mode: 'queue',
     content: [{ type: 'text', text: 'ping' }],
@@ -856,12 +906,12 @@ test('native dsh web runs a session round-trip with the live extras active', asy
   await delay(800)
   const jsonl = listSessionJsonl(dir).filter((path) => path.includes(sessionId))
   assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId} with live extras patched\n${dump('live round-trip')}`)
-  const header = readFileSync(jsonl[0], 'utf8').split('\n', 1)[0]
+  const header = readSessionJsonl(jsonl[0]).split('\n', 1)[0]
   assert.match(header, /"type":"session"/, `jsonl lost its header:\n${header}\n${dump('live round-trip')}`)
   const exportUrl = new URL('/api/session.export', url)
   exportUrl.searchParams.set('sessionId', sessionId)
   exportUrl.searchParams.set('includeDescendants', 'true')
-  const exp = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+  const exp = await session.request(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
   assert.equal(exp.status, 200, `session.export ${sessionId} HTTP ${exp.status}\n${dump('live round-trip')}`)
 })
 
@@ -870,9 +920,9 @@ test('native dsh persists a created session across process restarts', async (t) 
   let sessionId = ''
   const first = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }))
   try {
-    const created = await postApi(first.url, 'session.create')
-    sessionId = assertRpcOk('session.create', created, first.dump).result.value.sessionId
-    const prompted = await postApi(first.url, 'session.prompt', {
+    const created = await createSession(first)
+    sessionId = assertRpcOk('session/create', created, first.dump).result.value.sessionId
+    const prompted = await promptSession(first, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'persist me' }],
@@ -888,13 +938,13 @@ test('native dsh persists a created session across process restarts', async (t) 
     await second.stop()
     rmSync(bootHome, { recursive: true, force: true })
   })
-  const listed = await postApi(second.url, 'session.list')
-  const ids = (assertRpcOk('session.list', listed, second.dump).result.value.items ?? []).map((item) => item.sessionId)
+  const listed = await listSessions(second)
+  const ids = (assertRpcOk('session/list', listed, second.dump).result.value.items ?? []).map((item) => item.sessionId)
   assert.ok(ids.includes(sessionId), `session ${sessionId} lost after restart\n${listed.text}\n${second.dump('restart list')}`)
   const exportUrl = new URL('/api/session.export', second.url)
   exportUrl.searchParams.set('sessionId', sessionId)
   exportUrl.searchParams.set('includeDescendants', 'true')
-  const exp = await fetch(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
+  const exp = await second.request(exportUrl, { method: 'HEAD', signal: AbortSignal.timeout(10000) })
   assert.equal(exp.status, 200, `session.export ${sessionId} HTTP ${exp.status} after restart\n${second.dump('restart export')}`)
   const jsonl = listSessionJsonl(bootHome).filter((path) => path.includes(sessionId))
   assert.ok(jsonl.length > 0, `session.jsonl for ${sessionId} gone after restart`)
@@ -1037,12 +1087,12 @@ test('every inventoried plugin applies and activates on the web profile', { time
           problems.push(`process exited (code ${session.child.exitCode})`)
         } else {
           if (/plugin tree failed to load/.test(session.state.stderr)) problems.push('plugin tree failed to load')
-          const created = await postApi(session.url, 'session.create', { agentPreset: agentPlanePreset })
+          const created = await createSession(session, { agentPreset: agentPlanePreset })
           if (created.res.status === 200) {
             const body = JSON.parse(created.text)
-            if (body.result?.ok !== true) problems.push(`${agentPlanePreset}-preset session.create failed: ${created.text.slice(0, 200)}`)
+            if (body.result?.ok !== true) problems.push(`${agentPlanePreset}-preset session/create failed: ${created.text.slice(0, 200)}`)
           } else {
-            problems.push(`${agentPlanePreset}-preset session.create HTTP ${created.res.status}`)
+            problems.push(`${agentPlanePreset}-preset session/create HTTP ${created.res.status}`)
           }
         }
       } finally {
@@ -1126,7 +1176,7 @@ test('every inventoried plugin applies and activates on the web profile', { time
         if (baseUrl !== '') {
           let got
           try {
-            got = await postApi(baseUrl, 'pluginInventory/list', { args: {} })
+            got = await postApi(session, 'pluginInventory/list')
           } catch (error) {
             problems.push(`pluginInventory fetch failed (${String(error.cause?.code ?? error)}); process may have died after listen`)
           }
@@ -1159,8 +1209,18 @@ test('every inventoried plugin applies and activates on the web profile', { time
  * and session persistence all run end-to-end without network or keys.
  */
 function writeReplayFixtures(dir) {
-  const primary = join(dir, 'replay-session.jsonl')
-  writeFileSync(primary, `${JSON.stringify({ type: 'session', version: 0, id: 'replay', createdAt: Date.now(), cwd: '/tmp', delegationDepth: 0 })}\n`)
+  const primary = join(dir, `session.v${SESSION_FORMAT_VERSION}.jsonl`)
+  writeFileSync(primary, `${JSON.stringify({ type: 'session', version: SESSION_FORMAT_VERSION, id: 'replay', createdAt: Date.now(), cwd: '/tmp', isSeeded: false, delegationDepth: 0 })}\n`)
+  const plugin = join(dir, 'replay-plugin')
+  const source = join(repoRoot, 'packages/test-support/llm-replay')
+  mkdirSync(plugin)
+  copyFileSync(join(source, 'package.json'), join(plugin, 'package.json'))
+  cpSync(join(source, 'lib'), join(plugin, 'lib'), { recursive: true })
+  const installedModules = join(dirname(bin), 'node_modules')
+  const peers = existsSync(join(installedModules, '@deepseek-ai/dsh/package.json'))
+    ? installedModules : join(source, 'node_modules')
+  symlinkSync(peers, join(plugin, 'node_modules'), 'dir')
+  const replayEntry = pathToFileURL(join(plugin, 'lib/index.js')).href
   const textScript = join(dir, 'replay-text.json')
   writeFileSync(textScript, `${JSON.stringify([{ kind: 'chunks', chunks: [
     { type: 'block-start', index: 0, blockType: 'text' },
@@ -1188,13 +1248,37 @@ function writeReplayFixtures(dir) {
   // The session-title plugin shares the session's LLM route and consumes a
   // replay entry per title generation; disabling it keeps fixture entries in
   // 1:1 correspondence with the turn's model calls.
-  writeFileSync(replayPatch, `- id: session-title-llm\n  disabled: true\n- insert:\n    - id: llm-replay\n      name: '@deepseek-ai/dsh-llm-replay'\n`)
+  writeFileSync(replayPatch, `- id: session-title-llm\n  disabled: true\n- id: llm-deepseek\n  disabled: true\n- insert:\n    - id: llm-replay\n      name: ${JSON.stringify(replayEntry)}\n      config:\n        providers:\n          - id: deepseek-official\n            models:\n              - id: deepseek-flash\n`)
   return { primary, textScript, toolScript, replayPatch }
+}
+
+// Use the current Session lifecycle and the LLM package's own stream encoder.
+function writeTextReplaySession(path, id, chunks, delegationDepth = 0) {
+  const createdAt = Date.now()
+  const accumulator = new AssistantStreamAccumulator()
+  const assembler = new BlockAssembler()
+  chunks.forEach((chunk, index) => {
+    accumulator.push({ time: createdAt + index, chunk })
+    assembler.push(chunk)
+  })
+  const events = [
+    { type: 'turn/start', data: { turn: 1 } },
+    { type: 'step/start', data: { turn: 1, step: 1 } },
+    { type: 'assistant/message', data: { turn: 1, step: 1, stream: [...accumulator.snapshot()],
+      message: createAssistantMessage({ content: assembler.blocks(), source: { provider: 'deepseek-official', model: 'deepseek-flash' } }),
+    }, surfaceOp: 'append' },
+    { type: 'step/end', data: { turn: 1, step: 1 } },
+    { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+  ]
+  writeFileSync(path, [
+    JSON.stringify({ type: 'session', version: SESSION_FORMAT_VERSION, id, createdAt, cwd: '/tmp', isSeeded: false, delegationDepth }),
+    ...events.map((event, seq) => JSON.stringify({ ...event, seq, time: createdAt + seq * 100 })), '',
+  ].join('\n'))
 }
 
 function replayEnv(dir, script, extra = {}) {
   return nativeEnv({
-    DSH_SNAPSHOT_FILE: join(dir, 'replay-session.jsonl'),
+    DSH_SNAPSHOT_FILE: join(dir, `session.v${SESSION_FORMAT_VERSION}.jsonl`),
     DSH_SNAPSHOT_OVERRIDE: script,
     ...extra,
   })
@@ -1229,9 +1313,9 @@ test('native dsh web completes a session turn via llm-replay (assistant message 
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'say hi' }],
@@ -1241,7 +1325,7 @@ test('native dsh web completes a session turn via llm-replay (assistant message 
     await delay(2500)
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('replay turn')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"type":"assistant\/message"/, `assistant message missing — the turn never completed\n${session.dump('replay turn')}`)
     assert.match(text, /"type":"turn\/end"/, `turn did not end\n${session.dump('replay turn')}`)
     assert.match(text, /Hello from native dsh!/, `replayed answer not persisted\n${session.dump('replay turn')}`)
@@ -1261,9 +1345,9 @@ test('native dsh web executes a bash tool call end-to-end via llm-replay', async
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'run a command' }],
@@ -1273,7 +1357,7 @@ test('native dsh web executes a bash tool call end-to-end via llm-replay', async
     await delay(3500)
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('tool turn')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"type":"tool\/call"/, `tool call not recorded\n${session.dump('tool turn')}`)
     assert.match(text, /"type":"tool\/result"/, `tool result not recorded — bash never ran\n${session.dump('tool turn')}`)
     assert.match(text, /hello-from-native\\n/, `bash command output missing from the tool result\n${session.dump('tool turn')}`)
@@ -1310,9 +1394,9 @@ test('native dsh web executes a write tool call via llm-replay (file lands on di
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'write a file' }],
@@ -1322,7 +1406,7 @@ test('native dsh web executes a write tool call via llm-replay (file lands on di
     await delay(3500)
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('write turn')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"type":"tool\/result"/, `tool result not recorded\n${session.dump('write turn')}`)
     // The sandboxed fs backend resolved the workspace (the process cwd) and
     // really wrote the file: assert both the recorded result and on-disk bytes.
@@ -1368,9 +1452,9 @@ test('native dsh web chains write then read tools via llm-replay', async (t) => 
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'write then read a file' }],
@@ -1380,7 +1464,7 @@ test('native dsh web chains write then read tools via llm-replay', async (t) => 
     await delay(4500)
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('write-read turn')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     const results = [...text.matchAll(/"type":"tool\/result"/g)]
     assert.ok(results.length >= 2, `expected write + read results, got ${results.length}\n${session.dump('write-read turn')}`)
     assert.match(text, /hello from the write tool/, `read tool did not return the written content\n${session.dump('write-read turn')}`)
@@ -1417,10 +1501,10 @@ test('native dsh web keeps session context across multiple turns via llm-replay'
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
     for (const prompt of ['first turn', 'second turn']) {
-      const prompted = await postApi(session.url, 'session.prompt', {
+      const prompted = await promptSession(session, {
         sessionId,
         mode: 'queue',
         content: [{ type: 'text', text: prompt }],
@@ -1431,7 +1515,7 @@ test('native dsh web keeps session context across multiple turns via llm-replay'
     }
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}\n${session.dump('multi-turn')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     const turns = [...text.matchAll(/"type":"turn\/end"/g)]
     assert.ok(turns.length >= 2, `expected 2 completed turns, got ${turns.length}\n${session.dump('multi-turn')}`)
     assert.match(text, /First answer\./, `first turn's answer missing\n${session.dump('multi-turn')}`)
@@ -1453,11 +1537,7 @@ test('native dsh web delegates a subagent via llm-replay (child session + model 
     { type: 'block-end', index: 0, block: { type: 'text', text: 'child says hi' } },
     { type: 'finish', reason: { kind: 'stop' } },
   ]
-  writeFileSync(childLog, [
-    JSON.stringify({ type: 'session', version: 0, id: 'child-1', createdAt: Date.now(), cwd: '/tmp', delegationDepth: 1, seedLength: 0 }),
-    ...childChunks.map((chunk, i) => JSON.stringify({ type: 'assistant/chunk', seq: i + 1, time: Date.now() + i, data: { turn: 1, step: 1, chunk } })),
-    '',
-  ].join('\n'))
+  writeTextReplaySession(childLog, 'child-1', childChunks, 1)
   const parentScript = join(dir, 'replay-subagent.json')
   writeFileSync(parentScript, `${JSON.stringify([
     { kind: 'chunks', chunks: [
@@ -1479,9 +1559,9 @@ test('native dsh web delegates a subagent via llm-replay (child session + model 
   const session = await bootNativeWeb(env, ['--port', '0'], { patchFiles: [replayPatch] })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'delegate a task' }],
@@ -1491,7 +1571,7 @@ test('native dsh web delegates a subagent via llm-replay (child session + model 
     await delay(6000)
     const parentLog = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(parentLog.length > 0, `no parent session.jsonl\n${session.dump('subagent')}`)
-    const parentText = readFileSync(parentLog[0], 'utf8')
+    const parentText = readSessionJsonl(parentLog[0])
     assert.match(parentText, /"type":"tool\/call"/, `subagent tool call not recorded\n${session.dump('subagent')}`)
     assert.match(parentText, /"type":"tool\/result"/, `subagent result not recorded\n${session.dump('subagent')}`)
     assert.match(parentText, /The subagent replied: child says hi/, `parent final answer missing\n${session.dump('subagent')}`)
@@ -1499,7 +1579,7 @@ test('native dsh web delegates a subagent via llm-replay (child session + model 
     // The child ran as its own session with its own replayed model call.
     const childLogs = listSessionJsonl(bootHome).filter((p) => !p.includes(sessionId))
     assert.ok(childLogs.length > 0, `no child session.jsonl created\n${session.dump('subagent')}`)
-    const childText = readFileSync(childLogs[0], 'utf8')
+    const childText = readSessionJsonl(childLogs[0])
     assert.match(childText, /say hi/, `child prompt missing\n${childText}`)
     assert.match(childText, /child says hi/, `child model answer missing\n${childText}`)
   } finally {
@@ -1534,9 +1614,9 @@ test('native dsh web executes the todo_write tool via llm-replay', async (t) => 
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'track a task' }],
@@ -1547,7 +1627,7 @@ test('native dsh web executes the todo_write tool via llm-replay', async (t) => 
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}
 ${session.dump('todo')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"type":"tool\/result"/, `todo result not recorded
 ${session.dump('todo')}`)
     assert.match(text, /1 pending, 0 in progress, 0 completed/, `todo store did not update
@@ -1586,9 +1666,9 @@ test('native dsh web creates a goal via llm-replay', async (t) => {
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'create a goal' }],
@@ -1599,7 +1679,7 @@ test('native dsh web creates a goal via llm-replay', async (t) => {
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}
 ${session.dump('goal')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"type":"tool\/result"/, `goal result not recorded
 ${session.dump('goal')}`)
     assert.match(text, /"objective":"write a native goal"/, `created goal objective missing from the result
@@ -1632,9 +1712,9 @@ test('native dsh web registers an ask_user_question interaction and pauses the t
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'ask the user' }],
@@ -1645,7 +1725,7 @@ test('native dsh web registers an ask_user_question interaction and pauses the t
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl for ${sessionId}
 ${session.dump('ask')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"type":"tool\/call"/, `ask_user_question call not recorded
 ${session.dump('ask')}`)
     assert.match(text, /ask_user_question/, `ask tool name missing
@@ -1673,8 +1753,8 @@ function zipEntryText(zipBytes, entryName) {
   assert.ok(eocd !== -1, 'no EOCD in zip')
   const count = buf.readUInt16LE(eocd + 10)
   const cdOffset = buf.readUInt32LE(eocd + 16)
+  let off = cdOffset
   for (let i = 0; i < count; i++) {
-    const off = cdOffset + i * 46
     assert.equal(buf.readUInt32LE(off), 0x02014b50, 'bad central directory signature')
     const method = buf.readUInt16LE(off + 10)
     const compressedSize = buf.readUInt32LE(off + 20)
@@ -1684,6 +1764,7 @@ function zipEntryText(zipBytes, entryName) {
     const commentLen = buf.readUInt16LE(off + 32)
     const localOffset = buf.readUInt32LE(off + 42)
     const name = buf.subarray(off + 46, off + 46 + nameLen).toString('utf8')
+    off += 46 + nameLen + extraLen + commentLen
     if (name !== entryName) continue
     // Local file header: 30-byte fixed part + name/extra.
     assert.equal(buf.readUInt32LE(localOffset), 0x04034b50, 'bad local header signature')
@@ -1705,18 +1786,18 @@ test('native dsh session.export returns a zip containing the session jsonl', asy
   mkdirSync(bootHome, { recursive: true })
   const session = await bootNativeWeb(nativeEnv({ DSH_HOME: bootHome }), ['--port', '0'], {})
   try {
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
     const exportUrl = new URL('/api/session.export', session.url)
     exportUrl.searchParams.set('sessionId', sessionId)
     exportUrl.searchParams.set('includeDescendants', 'true')
-    const res = await fetch(exportUrl, { signal: AbortSignal.timeout(10000) })
+    const res = await session.request(exportUrl, { signal: AbortSignal.timeout(10000) })
     assert.equal(res.status, 200, `session.export HTTP ${res.status}
 ${session.dump('export')}`)
     const body = new Uint8Array(await res.arrayBuffer())
     assert.equal(body[0], 0x50, `not a zip: ${Buffer.from(body).subarray(0, 20).toString('hex')}`)
     assert.equal(body[1], 0x4b)
-    const jsonl = zipEntryText(body, 'session.jsonl')
+    const jsonl = zipEntryText(body, `session.v${SESSION_FORMAT_VERSION}.jsonl`)
     assert.match(jsonl, /"type":"session"/, `exported jsonl lost its header:
 ${jsonl.slice(0, 200)}`)
     assert.match(jsonl, new RegExp(sessionId.replace(/[-]/g, '\\-')), `exported jsonl missing session ${sessionId}
@@ -1765,7 +1846,7 @@ ${r.stdout}`)
     // The bash tool really ran: its output landed in the headless session log.
     const log = listSessionJsonl(dir)[0]
     assert.ok(log !== undefined, `no headless session.jsonl under ${dir}`)
-    const text = readFileSync(log, 'utf8')
+    const text = readSessionJsonl(log)
     assert.match(text, /hello-from-native\\n/, `bash output missing from headless session
 ${text.slice(0, 400)}`)
   } finally {
@@ -1794,11 +1875,7 @@ test('native dsh web runs two sessions concurrently via llm-replay', async (t) =
     { type: 'block-end', index: 0, block: { type: 'text', text: 'answer from session B' } },
     { type: 'finish', reason: { kind: 'stop' } },
   ]
-  writeFileSync(scriptB, [
-    JSON.stringify({ type: 'session', version: 0, id: 'session-b', createdAt: Date.now(), cwd: '/tmp', delegationDepth: 0, seedLength: 0 }),
-    ...bChunks.map((chunk, i) => JSON.stringify({ type: 'assistant/chunk', seq: i + 1, time: Date.now() + i, data: { turn: 1, step: 1, chunk } })),
-    '',
-  ].join('\n'))
+  writeTextReplaySession(scriptB, 'session-b', bChunks)
   const bootHome = join(dir, 'home')
   mkdirSync(bootHome, { recursive: true })
   const session = await bootNativeWeb(replayEnv(dir, scriptA, { DSH_HOME: bootHome, DSH_SNAPSHOT_CHILD_FILES: scriptB }), ['--port', '0'], {
@@ -1806,14 +1883,14 @@ test('native dsh web runs two sessions concurrently via llm-replay', async (t) =
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const createA = await postApi(session.url, 'session.create')
-    const idA = assertRpcOk('session.create', createA, session.dump).result.value.sessionId
-    const createB = await postApi(session.url, 'session.create')
-    const idB = assertRpcOk('session.create', createB, session.dump).result.value.sessionId
-    // Prompt both sessions in parallel; the worker engines must interleave.
+    const createA = await createSession(session)
+    const idA = assertRpcOk('session/create', createA, session.dump).result.value.sessionId
+    const createB = await createSession(session)
+    const idB = assertRpcOk('session/create', createB, session.dump).result.value.sessionId
+    // Queue both prompts together; replay binds scripts by first model call.
     const [ra, rb] = await Promise.all([
-      postApi(session.url, 'session.prompt', { sessionId: idA, mode: 'queue', content: [{ type: 'text', text: 'prompt A' }], clientTimeZone: 'UTC' }),
-      postApi(session.url, 'session.prompt', { sessionId: idB, mode: 'queue', content: [{ type: 'text', text: 'prompt B' }], clientTimeZone: 'UTC' }),
+      promptSession(session, { sessionId: idA, mode: 'queue', content: [{ type: 'text', text: 'prompt A' }], clientTimeZone: 'UTC' }),
+      promptSession(session, { sessionId: idB, mode: 'queue', content: [{ type: 'text', text: 'prompt B' }], clientTimeZone: 'UTC' }),
     ])
     assert.equal(ra.res.status, 200, ra.text)
     assert.equal(rb.res.status, 200, rb.text)
@@ -1824,16 +1901,28 @@ test('native dsh web runs two sessions concurrently via llm-replay', async (t) =
 ${session.dump('concurrent')}`)
     assert.ok(logB !== undefined, `session B jsonl missing
 ${session.dump('concurrent')}`)
-    const textA = readFileSync(logA, 'utf8')
-    const textB = readFileSync(logB, 'utf8')
-    assert.match(textA, /answer from session A/, `session A answer missing
-${textA.slice(0, 400)}`)
+    const textA = readSessionJsonl(logA)
+    const textB = readSessionJsonl(logB)
     assert.match(textA, /"type":"turn\/end"/, `session A turn did not end
 ${textA.slice(0, 400)}`)
-    assert.match(textB, /answer from session B/, `session B answer missing
-${textB.slice(0, 400)}`)
     assert.match(textB, /"type":"turn\/end"/, `session B turn did not end
 ${textB.slice(0, 400)}`)
+    const rowsA = textA.trim().split('\n').map((line) => JSON.parse(line))
+    const rowsB = textB.trim().split('\n').map((line) => JSON.parse(line))
+    const answers = [rowsA, rowsB].map((rows) => rows
+      .filter((row) => row.type === 'assistant/message')
+      .flatMap((row) => row.data.message.content)
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text))
+    assert.equal(answers[0].length, 1, 'session A must contain one isolated answer')
+    assert.equal(answers[1].length, 1, 'session B must contain one isolated answer')
+    assert.deepEqual(answers.flat().sort(), ['answer from session A', 'answer from session B'])
+    for (const [rows, own, other] of [[rowsA, 'prompt A', 'prompt B'], [rowsB, 'prompt B', 'prompt A']]) {
+      const inputs = rows.filter((row) => row.type === 'user/message')
+        .flatMap((row) => row.data.content).filter((block) => block.type === 'text').map((block) => block.text)
+      assert.ok(inputs.includes(own), `${own} must stay in its owning session`)
+      assert.ok(!inputs.includes(other), `${other} leaked across sessions`)
+    }
   } finally {
     await session.stop()
   }
@@ -1846,7 +1935,7 @@ test('native dsh web edits a file via llm-replay (read→edit→read)', async (t
   writeFileSync(join(process.cwd(), fileName), 'hello world\n')
   t.after(() => rmSync(join(process.cwd(), fileName), { force: true }))
   const { replayPatch } = writeReplayFixtures(dir)
-  const args = (id, name, payload) => ({ id, name, payload })
+  const args = (id, name, payload) => ({ id, name, argumentsDelta: JSON.stringify(payload) })
   const script = join(dir, 'replay-edit.json')
   writeFileSync(script, `${JSON.stringify([
     { kind: 'chunks', chunks: [
@@ -1881,9 +1970,9 @@ test('native dsh web edits a file via llm-replay (read→edit→read)', async (t
     patchFiles: [replayPatch],
   })
   try {
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'edit the file' }],
@@ -1894,7 +1983,7 @@ test('native dsh web edits a file via llm-replay (read→edit→read)', async (t
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl
 ${session.dump('edit')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     const results = [...text.matchAll(/"type":"tool\/result"/g)]
     assert.ok(results.length >= 3, `expected read/edit/read results, got ${results.length}
 ${session.dump('edit')}`)
@@ -1922,9 +2011,9 @@ test('native dsh web contains a model error via llm-replay (process survives)', 
   })
   try {
     assert.equal(session.child.exitCode, null, session.dump('listen'))
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'say hi' }],
@@ -1937,12 +2026,12 @@ test('native dsh web contains a model error via llm-replay (process survives)', 
     assert.equal(session.child.exitCode, null, `process died on a model error\n${session.dump('error')}`)
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl\n${session.dump('error')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"kind":"error"/, `turn did not end in error\n${text.slice(0, 400)}`)
     assert.match(text, /simulated model failure/, `error message not recorded\n${text.slice(0, 400)}`)
     assert.match(text, /E_SIMULATED/, `error code not recorded\n${text.slice(0, 400)}`)
     // The session still answers a follow-up request.
-    const again = await postApi(session.url, 'session.prompt', {
+    const again = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'are you alive?' }],
@@ -1983,9 +2072,9 @@ test('native dsh web searches file contents via the grep tool (llm-replay)', asy
     patchFiles: [replayPatch],
   })
   try {
-    const created = await postApi(session.url, 'session.create')
-    const sessionId = assertRpcOk('session.create', created, session.dump).result.value.sessionId
-    const prompted = await postApi(session.url, 'session.prompt', {
+    const created = await createSession(session)
+    const sessionId = assertRpcOk('session/create', created, session.dump).result.value.sessionId
+    const prompted = await promptSession(session, {
       sessionId,
       mode: 'queue',
       content: [{ type: 'text', text: 'find the needle' }],
@@ -1995,7 +2084,7 @@ test('native dsh web searches file contents via the grep tool (llm-replay)', asy
     await delay(4000)
     const jsonl = listSessionJsonl(bootHome).filter((p) => p.includes(sessionId))
     assert.ok(jsonl.length > 0, `no session.jsonl\n${session.dump('grep')}`)
-    const text = readFileSync(jsonl[0], 'utf8')
+    const text = readSessionJsonl(jsonl[0])
     assert.match(text, /"type":"tool\/result"/, `grep result not recorded\n${session.dump('grep')}`)
     assert.doesNotMatch(text, /isError":true/, `grep errored\n${session.dump('grep')}`)
     assert.match(text, /needle-to-find here/, `grep result missing the matched line\n${session.dump('grep')}`)
@@ -2022,7 +2111,7 @@ function probe(family) {
   assert.ok(existsSync(bin), `native binary missing: ${bin}`)
   const dir = mkdtempSync(join(tmpdir(), 'dsh-native-probe-'))
   try {
-    const patch = writeInsertPatch(dir, ['@deepseek-ai/dsh-native-probe'])
+    const patch = writeInsertPatch(dir, [pathToFileURL(join(repoRoot, 'packages/test-support/native-probe/src/index.js')).href])
     const result = spawnSync(bin, ['--profile', 'web', '--patch', patch, '--no-open', '--port', '0'], {
       env: nativeEnv({ DSH_HOME: dir, DSH_NATIVE_PROBE: family }),
       encoding: 'utf8',
@@ -2080,21 +2169,33 @@ test('native Worker, watch/HMR, cordis runners, and directory-picker work', () =
   }
 })
 
-test('native dsh --profile web hands the URL to xdg-open', async () => {
+test('native dsh --profile web hands the authenticated URL to the configured browser', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-native-xdg-'))
   const opener = join(dir, 'xdg-open')
   const opened = join(dir, 'opened')
-  writeFileSync(opener, `#!/bin/sh\nprintf '%s\\n' "$1" > "${opened}"\n`)
+  writeFileSync(opener, '#!/bin/sh\nprintf \'%s\\n\' "$1" > "$BROWSER_RECEIPT"\n: > "$BROWSER_RECEIPT.ready"\n')
   chmodSync(opener, 0o755)
   const bootHome = mkdtempSync(join(tmpdir(), 'dsh-native-web-open-'))
+  let session
   try {
-    await bootWebAndFetch(nativeEnv({
+    session = await bootNativeWeb(nativeEnv({
       DSH_HOME: bootHome,
       PATH: `${dir}:${process.env.PATH ?? ''}`,
-    }), [], { openBrowser: true })
-    assert.equal(existsSync(opened), true, `xdg-open was not invoked (${opened})`)
-    assert.match(readFileSync(opened, 'utf8').trim(), /^http:\/\/127\.0\.0\.1:\d+$/)
+      BROWSER: opener,
+      BROWSER_RECEIPT: opened,
+      SSH_CONNECTION: undefined,
+      SSH_TTY: undefined,
+      DISPLAY: '',
+      WAYLAND_DISPLAY: '',
+      XDG_CURRENT_DESKTOP: 'X-Generic',
+      DESKTOP_SESSION: 'generic',
+    }), ['--port', '0'], { openBrowser: true })
+    const deadline = Date.now() + 5000
+    while (!existsSync(opened + '.ready') && Date.now() < deadline && session.child.exitCode === null) await delay(10)
+    assert.equal(existsSync(opened + '.ready'), true, `configured browser did not acknowledge the URL (${opened})`)
+    assert.equal(readFileSync(opened, 'utf8').trim(), session.bootstrapUrl)
   } finally {
+    await session?.stop()
     rmSync(bootHome, { recursive: true, force: true })
     rmSync(dir, { recursive: true, force: true })
   }

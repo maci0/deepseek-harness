@@ -135,6 +135,11 @@ describe('sandbox isolation and Node-API traps', () => {
     expect(Object.getOwnPropertySymbols(Array)).not.toContain(Symbol.hasInstance)
   })
 
+  it('honors the configured vmTimeoutMs for the synchronous portion', async () => {
+    const harness = await setup({ vmTimeoutMs: 50 })
+    await expect(mount(harness, 'while (true) {}')).rejects.toThrow(/timed? ?out/i)
+    expect(running(harness.runner, AGENT_A)).toEqual([{ id: 'probe-1', running: false }])
+  })
 })
 
 describe('host-half failures leave nothing running', () => {
@@ -189,6 +194,7 @@ describe('parse failures teach the fix', () => {
     }
     expect(message).toContain('failed to parse')
     expect(message).toContain('});')
+    expect(message).toContain('^')
     expect(message).toContain('BODY of an async function')
     expect(message).not.toContain('TypeScript')
   })

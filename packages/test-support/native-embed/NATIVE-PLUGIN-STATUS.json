@@ -1,41 +1,23 @@
 {
   "counts": {
-    "total": 182,
-    "embedded": 182,
+    "total": 256,
+    "embedded": 256,
     "degraded": 0,
     "missing": 0,
-    "staticHits": 182,
-    "fallback": 0,
-    "boot": 182,
-    "live": 8,
-    "e2e": 5
+    "staticHits": 246,
+    "fallback": 10,
+    "boot": 0,
+    "live": 0,
+    "e2e": 0
   },
   "rows": [
-    {
-      "name": "@deepseek-ai/cordis-plugin-hmr",
-      "dir": "vendor/hmr",
-      "kinds": "yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/cordis-plugin-include",
-      "dir": "vendor/include",
-      "kinds": "yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
     {
       "name": "@deepseek-ai/cordis-plugin-logger-console",
       "dir": "vendor/logger-console",
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -44,25 +26,25 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-acp",
       "dir": "packages/acp/acp",
-      "kinds": "apply",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-acp-demo",
-      "dir": "packages/examples/acp-demo",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-acp-app",
+      "dir": "packages/bundle/acp-app",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -71,7 +53,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -80,7 +62,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -89,7 +71,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -98,25 +80,25 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
-      "name": "@deepseek-ai/dsh-agent-presets",
-      "dir": "packages/preset/agent-presets",
-      "kinds": "service+yaml",
+      "name": "@deepseek-ai/dsh-agent-preset",
+      "dir": "packages/preset/agent-preset",
+      "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
-      "name": "@deepseek-ai/dsh-agent-spine-demo",
-      "dir": "packages/examples/agent-spine-demo",
-      "kinds": "apply+yaml",
+      "name": "@deepseek-ai/dsh-agent-preset-registry",
+      "dir": "packages/preset/agent-preset-registry",
+      "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -125,7 +107,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-account-controller",
+      "dir": "packages/api/account-controller",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -134,7 +125,25 @@
       "kinds": "service+apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-job-controller",
+      "dir": "packages/api/job-controller",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-remote-access",
+      "dir": "packages/api/remote-access",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -143,7 +152,52 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-session-controller",
+      "dir": "packages/api/session-controller",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-settings-controller",
+      "dir": "packages/api/settings-controller",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-terminal-controller",
+      "dir": "packages/api/terminal-controller",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-workspace-controller",
+      "dir": "packages/api/workspace-controller",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-workspace-files",
+      "dir": "packages/api/workspace-files",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -152,25 +206,16 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-authorization",
       "dir": "packages/credentials/authorization",
-      "kinds": "service",
+      "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (e2e, boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-bash-local",
-      "dir": "packages/shell/bash-local",
-      "kinds": "yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -179,7 +224,16 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-browser-use",
+      "dir": "packages/browser-use/browser-use",
+      "kinds": "service",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -188,7 +242,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-file-upload",
+      "dir": "packages/client/file-upload",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -197,7 +260,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -206,7 +269,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -214,17 +277,35 @@
       "dir": "packages/client/modules",
       "kinds": "service+apply+yaml",
       "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "npmStatic": "refused",
+      "tested": "not verified",
       "note": ""
     },
     {
-      "name": "@deepseek-ai/dsh-client-runtime",
-      "dir": "packages/client/runtime",
+      "name": "@deepseek-ai/dsh-client-product-analytics",
+      "dir": "packages/client/product-analytics",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-resources",
+      "dir": "packages/client/resources",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-shortcuts",
+      "dir": "packages/client/shortcuts",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -233,7 +314,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-approval",
+      "dir": "packages/client/ui-approval",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -242,7 +332,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -251,7 +341,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-chat",
+      "dir": "packages/client/ui-chat",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -260,7 +359,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -269,7 +368,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -278,7 +377,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-deepseek-model-label-1017",
+      "dir": "packages/client/ui-deepseek-model-label-1017",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -287,7 +395,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -296,7 +404,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -305,7 +413,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -314,7 +422,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -323,7 +431,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -332,7 +440,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -341,7 +449,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -350,7 +458,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -359,7 +467,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-open-in-app",
+      "dir": "packages/client/ui-open-in-app",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -368,7 +485,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -377,7 +494,25 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-plugin-manager",
+      "dir": "packages/client/ui-plugin-manager",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-plugin-market",
+      "dir": "packages/client/ui-plugin-market",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -386,7 +521,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -395,7 +530,34 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-schedule",
+      "dir": "packages/client/ui-schedule",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-secret-mask",
+      "dir": "packages/client/ui-secret-mask",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-session",
+      "dir": "packages/client/ui-session",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -404,7 +566,25 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-account",
+      "dir": "packages/client/ui-settings-account",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-agent-loop",
+      "dir": "packages/client/ui-settings-agent-loop",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -413,7 +593,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -422,7 +602,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -431,7 +611,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -440,7 +620,52 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-session-log",
+      "dir": "packages/client/ui-settings-session-log",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-shell",
+      "dir": "packages/client/ui-settings-shell",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-subagent",
+      "dir": "packages/client/ui-settings-subagent",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-web-search",
+      "dir": "packages/client/ui-settings-web-search",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-shortcuts",
+      "dir": "packages/client/ui-shortcuts",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -449,7 +674,52 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-browser",
+      "dir": "packages/client/ui-sidebar-browser",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
+      "dir": "packages/client/ui-sidebar-documentpreview",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-files",
+      "dir": "packages/client/ui-sidebar-files",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-right",
+      "dir": "packages/client/ui-sidebar-right",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-terminal",
+      "dir": "packages/client/ui-sidebar-terminal",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -458,7 +728,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -467,7 +737,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -476,7 +746,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -485,7 +755,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -494,7 +764,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -503,7 +773,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -512,7 +782,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -521,16 +791,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-code-runtime-worker-thread",
-      "dir": "packages/code-runtime/code-runtime-worker-thread",
-      "kinds": "yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -539,7 +800,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -548,7 +809,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -557,7 +818,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -566,7 +827,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -575,7 +836,16 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-compaction-image-offload",
+      "dir": "packages/compaction/compaction-image-offload",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -584,7 +854,25 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-computer-use",
+      "dir": "packages/computer-use/computer-use",
+      "kinds": "service",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-config-editor",
+      "dir": "packages/boot/config-editor",
+      "kinds": "service+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -593,7 +881,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -601,8 +889,8 @@
       "dir": "packages/extensions/cordis-host-runner",
       "kinds": "yaml",
       "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "npmStatic": "refused",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -611,16 +899,34 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
-      "name": "@deepseek-ai/dsh-e2b",
-      "dir": "packages/e2b/e2b",
+      "name": "@deepseek-ai/dsh-deepseek-account-platform",
+      "dir": "packages/credentials/deepseek-account-platform",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-deepseek-llm-api-extensions",
+      "dir": "packages/llm/deepseek-llm-api-extensions",
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (e2e, boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-desktop-host",
+      "dir": "apps/desktop-host",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -629,7 +935,151 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-api-speech-to-text",
+      "dir": "packages/experimental/api-speech-to-text",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-auto-review",
+      "dir": "packages/experimental/auto-review",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp",
+      "dir": "packages/experimental/browser-use-chrome-devtools-mcp",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-browser-use-playwright-mcp",
+      "dir": "packages/experimental/browser-use-playwright-mcp",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-browser-use-stagehand-native",
+      "dir": "packages/experimental/browser-use-stagehand-native",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-client-ui-agent-team",
+      "dir": "packages/experimental/client-ui-agent-team",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-client-ui-claude-code-mods",
+      "dir": "packages/experimental/client-ui-claude-code-mods",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-client-ui-cot-translation",
+      "dir": "packages/experimental/client-ui-cot-translation",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-client-ui-voice-input",
+      "dir": "packages/experimental/client-ui-voice-input",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp",
+      "dir": "packages/experimental/computer-use-cua-driver-mcp",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-computer-use-cua-driver-native",
+      "dir": "packages/experimental/computer-use-cua-driver-native",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-cua-macos",
+      "dir": "packages/experimental/cua-macos",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-inspector",
+      "dir": "packages/experimental/inspector",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "refused",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-session-inspector",
+      "dir": "packages/experimental/session-inspector",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-speech-to-text",
+      "dir": "packages/experimental/speech-to-text",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-speech-to-text-sensevoice",
+      "dir": "packages/experimental/speech-to-text-sensevoice",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -638,7 +1088,34 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-tool-worktree",
+      "dir": "packages/experimental/tool-worktree",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-translator",
+      "dir": "packages/experimental/translator",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-worktree",
+      "dir": "packages/experimental/worktree",
+      "kinds": "service+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -647,16 +1124,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-fs-e2b",
-      "dir": "packages/e2b/fs-e2b",
-      "kinds": "yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (e2e, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -665,7 +1133,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -674,7 +1142,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -683,7 +1151,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -692,7 +1160,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -701,7 +1169,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-harness-dev-context",
+      "dir": "packages/context/harness-dev-context",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -710,34 +1187,34 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-hmr",
+      "dir": "packages/boot/hmr",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "refused",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-hooks-claude-code",
-      "dir": "packages/hooks/hooks-claude-code",
+      "dir": "packages/experimental/hooks-claude-code",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-hooks-codex",
-      "dir": "packages/hooks/hooks-codex",
+      "dir": "packages/experimental/hooks-codex",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-host-apiproxy",
-      "dir": "packages/host/apiproxy",
-      "kinds": "service+yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -746,7 +1223,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -755,7 +1232,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -764,7 +1241,16 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-open-in-app",
+      "dir": "packages/host/open-in-app",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -773,7 +1259,16 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-product-telemetry-otel",
+      "dir": "packages/host/product-telemetry-otel",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -782,16 +1277,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-invariants",
-      "dir": "packages/runtime-diagnostics/invariants",
-      "kinds": "service",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (e2e, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -800,25 +1286,34 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-llm",
       "dir": "packages/llm/llm",
-      "kinds": "service+yaml",
+      "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
-      "name": "@deepseek-ai/dsh-llm-deepseek",
-      "dir": "packages/llm/llm-deepseek",
+      "name": "@deepseek-ai/dsh-llm-deepseek-account",
+      "dir": "packages/llm/llm-deepseek-account",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-llm-deepseek-api-key",
+      "dir": "packages/llm/llm-deepseek-api-key",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -827,7 +1322,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -836,7 +1331,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -845,25 +1340,25 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-lsp",
       "dir": "packages/lsp/lsp",
-      "kinds": "service+yaml",
+      "kinds": "service",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-lsp-stdio",
       "dir": "packages/lsp/lsp-stdio",
-      "kinds": "apply+yaml",
+      "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -872,7 +1367,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-mcp-resources",
+      "dir": "packages/mcp/mcp-resources",
+      "kinds": "service+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -881,16 +1385,34 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-office-to-pdf",
+      "dir": "packages/document/office-to-pdf",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-otel",
+      "dir": "packages/telemetry/otel",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-permission-presets",
       "dir": "packages/interaction/permission-presets",
-      "kinds": "service+yaml",
+      "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -899,7 +1421,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -908,7 +1430,43 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-plugin-manager",
+      "dir": "packages/boot/plugin-manager",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-plugin-market",
+      "dir": "packages/boot/plugin-market",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-plugin-package-inventory-deepseek",
+      "dir": "packages/llm/plugin-package-inventory-deepseek",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "refused",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-ptc-runtime-node",
+      "dir": "packages/ptc-runtime/ptc-runtime-node",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -917,7 +1475,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -926,7 +1484,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -935,7 +1493,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -944,7 +1502,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -953,16 +1511,25 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-schedule",
       "dir": "packages/schedule/schedule",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-sdk-app",
+      "dir": "packages/bundle/sdk-app",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -971,7 +1538,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -980,7 +1547,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -989,7 +1556,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-log-deepseek",
+      "dir": "packages/session/session-log-deepseek",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -998,16 +1574,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-session-persistence-jsonl",
       "dir": "packages/session/session-persistence-jsonl",
-      "kinds": "yaml",
+      "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1016,7 +1592,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1025,7 +1601,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1034,7 +1610,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1043,7 +1619,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1052,7 +1628,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1061,7 +1637,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1070,16 +1646,16 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-session-title-all-prompts-llm",
-      "dir": "packages/session/session-title-all-prompts-llm",
-      "kinds": "apply",
+      "dir": "packages/experimental/session-title-all-prompts-llm",
+      "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1088,16 +1664,25 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
-      "name": "@deepseek-ai/dsh-settings-file",
-      "dir": "packages/settings/settings-file",
-      "kinds": "yaml",
+      "name": "@deepseek-ai/dsh-session-turn-outline",
+      "dir": "packages/session/session-turn-outline",
+      "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-settings",
+      "dir": "packages/settings/settings",
+      "kinds": "service+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1106,7 +1691,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1115,16 +1700,16 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-skill-badge",
-      "dir": "packages/skill/skill-badge",
+      "dir": "packages/experimental/skill-badge",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1133,7 +1718,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-skill-office",
+      "dir": "packages/skill/skill-office",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "refused",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1142,7 +1736,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1151,7 +1745,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-ssh",
+      "dir": "packages/ssh/ssh",
+      "kinds": "service",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1160,7 +1763,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1169,7 +1772,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1178,7 +1781,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1186,17 +1789,17 @@
       "dir": "packages/storage/storage-sqlite",
       "kinds": "apply",
       "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "npmStatic": "refused",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-subagent",
       "dir": "packages/subagent/subagent",
-      "kinds": "service+yaml",
+      "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1205,7 +1808,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1214,7 +1817,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1223,7 +1826,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1232,7 +1835,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1241,7 +1844,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1250,16 +1853,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-subprocess-e2b",
-      "dir": "packages/e2b/subprocess-e2b",
-      "kinds": "yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (e2e, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1268,7 +1862,7 @@
       "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1277,7 +1871,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1286,7 +1880,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1295,7 +1889,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1304,7 +1898,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1313,7 +1907,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1322,7 +1916,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1331,7 +1925,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1340,7 +1934,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1349,7 +1943,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1358,7 +1952,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1367,7 +1961,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1376,7 +1970,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1385,7 +1979,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1394,7 +1988,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1403,16 +1997,25 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-lsp",
       "dir": "packages/lsp/tool-lsp",
+      "kinds": "apply",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-present",
+      "dir": "packages/deliverables/tool-present",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1421,7 +2024,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1430,25 +2033,34 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-ralph",
-      "dir": "packages/workflow/tool-ralph",
+      "dir": "packages/experimental/tool-ralph",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-schedule",
+      "dir": "packages/schedule/tool-schedule",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-session-query",
-      "dir": "packages/session-query/tool-session-query",
+      "dir": "packages/experimental/tool-session-query",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1457,7 +2069,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1466,7 +2078,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1475,7 +2087,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1484,25 +2096,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
-      "note": ""
-    },
-    {
-      "name": "@deepseek-ai/dsh-tool-subagent-report",
-      "dir": "packages/subagent/tool-subagent-report",
-      "kinds": "apply+yaml",
-      "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-tool-terminal",
-      "dir": "packages/terminal/tool-terminal",
+      "dir": "packages/experimental/tool-terminal",
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1511,7 +2114,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1520,7 +2123,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1529,7 +2132,25 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-working-directory",
+      "dir": "packages/session/tool-working-directory",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-workspace-dependencies",
+      "dir": "packages/skill/tool-workspace-dependencies",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1538,7 +2159,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1546,8 +2167,8 @@
       "dir": "packages/typert/loader",
       "kinds": "apply+yaml",
       "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "npmStatic": "refused",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1556,7 +2177,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1565,16 +2186,16 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
       "name": "@deepseek-ai/dsh-user-questions",
       "dir": "packages/interaction/user-questions",
-      "kinds": "service+yaml",
+      "kinds": "yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1583,7 +2204,7 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1592,7 +2213,16 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-web-deepseek-api",
+      "dir": "packages/web/web-deepseek-api",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1600,8 +2230,8 @@
       "dir": "packages/web/web-fetch-http",
       "kinds": "apply+yaml",
       "embed": "embedded",
-      "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "npmStatic": "refused",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1610,7 +2240,7 @@
       "kinds": "apply+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1619,7 +2249,7 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1628,16 +2258,43 @@
       "kinds": "apply",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (live, boot, resolve)",
+      "tested": "not verified",
       "note": ""
     },
     {
-      "name": "@deepseek-ai/dsh-workflow-worker-thread",
-      "dir": "packages/workflow/workflow-worker-thread",
-      "kinds": "yaml",
+      "name": "@deepseek-ai/dsh-webhook",
+      "dir": "packages/experimental/webhook",
+      "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-webhook-github",
+      "dir": "packages/experimental/webhook-github",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-workflow-ptc",
+      "dir": "packages/workflow/workflow-ptc",
+      "kinds": "yaml",
+      "embed": "embedded",
+      "npmStatic": "refused",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-working-directory",
+      "dir": "packages/session/working-directory",
+      "kinds": "service+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     },
     {
@@ -1646,7 +2303,16 @@
       "kinds": "service+yaml",
       "embed": "embedded",
       "npmStatic": "static",
-      "tested": "yes (boot, resolve)",
+      "tested": "not verified",
+      "note": ""
+    },
+    {
+      "name": "@deepseek-ai/dsh-workspace-changes",
+      "dir": "packages/deliverables/workspace-changes",
+      "kinds": "apply+yaml",
+      "embed": "embedded",
+      "npmStatic": "static",
+      "tested": "not verified",
       "note": ""
     }
   ]

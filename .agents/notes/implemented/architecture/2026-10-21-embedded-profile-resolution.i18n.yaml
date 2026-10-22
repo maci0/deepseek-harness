@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-21-embedded-profile-resolution.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-21-embedded-profile-resolution.md
+/agent-note-share-profile-routing-with-the-embedded-runtime:
+  en: 96959dac8ac35fd5
+  zh: c373a58330644119
+/agent-note-share-profile-routing-with-the-embedded-runtime/problem:
+  en: 7459fc3fd2e3b1a8
+  zh: 113c0565f8ff3796
+/agent-note-share-profile-routing-with-the-embedded-runtime/decision:
+  en: 3f488f2f49da6553
+  zh: 26f1a9543cac34c8
+/agent-note-share-profile-routing-with-the-embedded-runtime/alternatives-considered:
+  en: 432f0851c447254e
+  zh: ead81dc238fb69d0
+/agent-note-share-profile-routing-with-the-embedded-runtime/consequences:
+  en: f71889066a00c1ae
+  zh: 8c1f37e53734904b
